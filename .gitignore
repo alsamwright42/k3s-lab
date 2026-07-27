@@ -1,0 +1,17 @@
+# Kubernetes / Helm secrets & local configs
+*.kubeconfig
+kubeconfig
+*.key
+*.pem
+*.pfx
+
+# Local IDE and System files
+.vscode/
+.idea/
+.DS_Store
+*.tmp
+*.log
+
+# Sensitive environment files
+.env
+.env.local
