@@ -1,17 +1,17 @@
-# Kubernetes / Helm secrets & local configs
+# Kubernetes secrets and credentials
 *.kubeconfig
-kubeconfig
-*.key
+kubeconfig*
 *.pem
-*.pfx
+*.key
+*.crt
 
-# Local IDE and System files
-.vscode/
-.idea/
-.DS_Store
-*.tmp
-*.log
-
-# Sensitive environment files
+# Local environment and secret overrides
 .env
-.env.local
+*.env
+secrets/
+*.secret.yaml
+
+# System and editor files
+.DS_Store
+*.swp
+*~
