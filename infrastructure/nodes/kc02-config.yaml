@@ -1,0 +1,6 @@
+# /etc/rancher/k3s/config.yaml on KC02
+node-ip: "192.168.1.51"
+flannel-iface: "enp0s31f6"
+node-label:
+  - "node-role.kubernetes.io/worker=true"
+  - "workload-type=compute"
