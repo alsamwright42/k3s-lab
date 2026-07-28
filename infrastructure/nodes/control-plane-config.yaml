@@ -5,3 +5,4 @@ node-taint:
   - "node-role.kubernetes.io/control-plane=true:NoSchedule"
 node-label:
   - "node-role.kubernetes.io/infra=true"
+
