@@ -4,5 +4,5 @@ token: "${K3S_TOKEN}"
 node-ip: "${WORKER_IP}"
 flannel-iface: "enp0s31f6"
 node-label:
-  - "node-role.kubernetes.io/worker=true"
+  - "node-type=worker"
   - "workload-type=compute"

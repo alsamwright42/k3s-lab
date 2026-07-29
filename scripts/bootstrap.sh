@@ -94,6 +94,17 @@ done
 
 echo ""
 echo "=== Node Bootstrap Complete ==="
-echo "Checking cluster status and labels:"
-wait_for_condition 15 4 "Cluster nodes to report as Ready" ssh -n -o BatchMode=yes "${CONTROL_PLANE_NODE}" "sudo k3s kubectl get nodes --show-labels"
+echo "Verifying all registered nodes are Ready..."
+
+# Loop through every node in the associative array
+for target_node in "$CONTROL_PLANE_NODE" "${!WORKER_NODES[@]}"; do
+    wait_for_condition 15 4 "Node ${target_node} to report as Ready" \
+        ssh -n -o BatchMode=yes kc01 "sudo k3s kubectl get nodes 2>/dev/null | grep -E '^${target_node}\s+.*Ready'"
+done
+
+echo ""
+echo "Cluster is fully online. Final status and labels:"
+ssh -n -o BatchMode=yes kc01 "sudo k3s kubectl get nodes --show-labels"
+
+
 

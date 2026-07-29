@@ -1,0 +1,15 @@
+# manifests/apps/portainer/values.yaml
+
+# 1. Pin the workload specifically to the infra/control plane node
+nodeSelector:
+  workload-type: infra
+
+# 2. Tolerate the NoSchedule taint on KC01
+tolerations:
+  - key: "node-role.kubernetes.io/control-plane"
+    operator: "Exists"
+    effect: "NoSchedule"
+
+# 3. Disable Portainer's strict TLS so we can manage SSL via Traefik Ingress later
+tls:
+  force: false
