@@ -1,5 +1,8 @@
 # ARD 003: Zero-Trust Proxy & TLS Namespace Architecture
 
+## Status
+Active
+
 ## Context
 During the deployment of Tier 4 (Identity & Access) and Tier 5 (Applications), we integrated Microsoft Entra External ID with Traefik ForwardAuth and automated our TLS certificates via `cert-manager` and the deSEC DNS-01 webhook. 
 

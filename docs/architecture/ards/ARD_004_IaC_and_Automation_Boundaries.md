@@ -1,5 +1,8 @@
 # ARD 004: Infrastructure as Code (IaC) Boundaries and Terraform Adoption
 
+## Status
+Active
+
 ## Context
 As the cluster architecture expands to integrate external cloud dependencies—specifically Microsoft Entra ID (App Registrations, Service Principals) and Azure Key Vault—we must provision these resources without resorting to manual "ClickOps" in the Azure Portal. While our internal Kubernetes cluster state is designed to be managed via GitOps (Argo CD), Argo CD is not designed to provision or manage external cloud infrastructure.
 

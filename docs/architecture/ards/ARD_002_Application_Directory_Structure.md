@@ -1,5 +1,8 @@
 # ARD 002: Application Manifest Directory Structure
 
+## Status
+Active
+
 ## Context
 As Tier 5 (Applications) workloads are introduced into the repository, we must establish a scalable directory structure within the `manifests/apps/` path. Placing declarative YAML manifests directly into the root of the `manifests/apps/` directory creates a flat-file structure that becomes unmanageable as the cluster scales. It also complicates automated deployment scoping for GitOps controllers, which often require isolated paths per application.
 

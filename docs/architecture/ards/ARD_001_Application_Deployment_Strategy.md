@@ -1,5 +1,8 @@
 # ARD 001: Application Deployment Strategy (Vaultwarden)
 
+## Status
+Active
+
 ## Context
 During the deployment of Tier 5 (Applications), Vaultwarden was introduced to the cluster to validate the Tier 4 (Identity & Access) Zero-Trust boundary enforced by Microsoft Entra ID and Traefik ForwardAuth. 
 

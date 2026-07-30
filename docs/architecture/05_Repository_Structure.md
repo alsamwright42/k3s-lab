@@ -13,6 +13,7 @@ k3s-lab/
 ├── docs/
 |   └── architecture/
 │       └── ards/
+|   └── build/
 ├── infrastructure/
 |   ├── nodes/
 │   └── terraform/
@@ -28,8 +29,9 @@ k3s-lab/
 * **`apps/`**: Reserved for source code or configurations for custom applications. 
 * **`core/k3s-config/`**: Baseline K3s system configurations and systemd service files.
 * **`docs/`**: reference documentation. This folder is synced to google drive on git commit as live sources for Gemini NotebookLM
-  * **`docs/architecture/`: Architecture Reference Documents (ARDs), deployment logs, and topology documentation (e.g., `01_Hardware_and_Network_Topology.md`, `02_Cluster_Deployment_Log.md`).
+  * **`docs/architecture/`**: Architecture Reference Documents (ARDs), deployment logs, and topology documentation (e.g., `01_Hardware_and_Network_Topology.md`, `02_Cluster_Deployment_Log.md`).
     * **`docs/architecture/ards`*: Architecture Reference Documents recording why architectural decisions were made.
+  * **`docs/build/`**: Documentation regarding the building of the IAC configuration
 * **`infrastructure/`**: Infrastructure as Code definitions.
   * **`infrastructure/nodes/`** : Node-specific configurations, including K3s server/agent configs that define taints and labels for `KC01` and `KC02`.
   *   **infrastructure/terraform/** : Declarative Terraform code for provisioning external cloud dependencies (e.g., Azure Key Vault, Entra ID Service Principals).
