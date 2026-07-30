@@ -22,6 +22,13 @@ spec:
       containers:
       - name: pause
         image: registry.k8s.io/pause:3.9
+        resources:
+          requests:
+            cpu: 10m
+            memory: 32Mi
+          limits:
+            cpu: 50m
+            memory: 64Mi
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -43,3 +50,10 @@ spec:
       containers:
       - name: web
         image: nginx:alpine
+        resources:
+          requests:
+            cpu: 10m
+            memory: 32Mi
+          limits:
+            cpu: 50m
+            memory: 64Mi
