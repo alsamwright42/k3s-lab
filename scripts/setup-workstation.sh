@@ -23,7 +23,12 @@ echo "Adding jetstack Helm repository..."
 helm repo add jetstack https://charts.jetstack.io
 helm repo update
 
-# 5. Verify local environment variables
+# 5. Add the External Secrets repository to Helm
+echo "Adding External Secrets Helm repository..."
+helm repo add external-secrets https://charts.external-secrets.io
+helm repo update
+
+# 6. Verify local environment variables
 echo "Verifying local .env file and tokens..."
 if [ ! -f "${REPO_ROOT}/.env" ]; then
     echo "WARNING: .env file not found at repository root!"
@@ -35,3 +40,32 @@ else
         echo "WARNING: DESEC_API_TOKEN is missing from .env!"
     fi
 fi
+
+# 7. Install the Terraform CLI (Official HashiCorp Repository)
+echo "Installing Terraform CLI..."
+# Install prerequisite packages
+sudo apt-get update && sudo apt-get install -y gnupg software-properties-common curl
+# Add the HashiCorp GPG key
+wget -O- https://apt.releases.hashicorp.com/gpg | \
+  gpg --dearmor | \
+  sudo tee /usr/share/keyrings/hashicorp-archive-keyring.gpg > /dev/null
+# Add the official HashiCorp Linux repository
+echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] \
+  https://apt.releases.hashicorp.com $(lsb_release -cs) main" | \
+  sudo tee /etc/apt/sources.list.d/hashicorp.list
+# Install Terraform
+sudo apt-get update && sudo apt-get install -y terraform
+echo "Terraform installation complete. Version:"
+terraform -version
+
+# 8. Install the Azure CLI
+echo "Installing Azure CLI..."
+# Download the script to a temporary file first
+curl -sL https://aka.ms/InstallAzureCLIDeb -o /tmp/install-az.sh
+# Execute it
+sudo bash /tmp/install-az.sh
+# Clean up the temporary file
+rm /tmp/install-az.sh
+
+echo "Azure CLI installation complete. Version:"
+az version
