@@ -57,6 +57,12 @@ spec:
           value: auth.samjam.dedyn.io
         - name: URL_PATH
           value: /_oauth
+        - name: COOKIE_DOMAIN
+          value: samjam.dedyn.io
+        - name: PROVIDERS_OIDC_USER_ID_CLAIM
+          value: preferred_username   
+        - name: LOG_LEVEL
+          value: trace 
         ports:
         - containerPort: 4181
 ---
@@ -80,7 +86,7 @@ metadata:
   namespace: default
 spec:
   forwardAuth:
-    address: http://traefik-forward-auth:4181
+    address: http://traefik-forward-auth.default.svc.cluster.local:4181
     trustForwardHeader: true
     authResponseHeaders:
       - X-Forwarded-User
@@ -93,6 +99,7 @@ metadata:
   namespace: default
   annotations:
     traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.middlewares: default-entra-forward-auth@kubernetescrd
 spec:
   tls:
     - hosts:
