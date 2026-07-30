@@ -40,6 +40,11 @@ Here is our current architecture plan, context, and decisions made so far:
   * **Rate Limiting:** Prevents hitting strict Let's Encrypt API throttling limits (e.g., 5 failures per hour) during frequent homelab teardown and rebuild cycles.
   * **Risk Mitigation:** The private key is generated and stored exclusively within the K3s cluster's internal storage as a Kubernetes Secret (`samjam-dedyn-io-tls`). It is managed automatically by `cert-manager` and never manually leaves the cluster environment.
 
+#### 4. Automation & Infrastructure as Code (IaC) Strategy
+To prevent tool collision and ensure all infrastructure is version-controlled, automation is segmented into three distinct control planes:
+* **Hardware & OS (Bash):** Local shell scripts handle headless minimal Debian node provisioning, static IP network bindings, and K3s daemon bootstrapping.
+* **Kubernetes Workloads (Argo CD / GitOps):** Argo CD manages the internal cluster state by continuously syncing the `manifests/` directory. Manual `kubectl apply` commands are prohibited for standard deployments.
+* **External Cloud Dependencies (Terraform):** Terraform manages all resources outside the local network (e.g., Azure Key Vault, Microsoft Entra ID App Registrations) to eliminate Azure Portal "ClickOps". 
 
 ## Your Task:
 
