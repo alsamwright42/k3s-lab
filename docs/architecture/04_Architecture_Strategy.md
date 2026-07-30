@@ -29,6 +29,18 @@ Here is our current architecture plan, context, and decisions made so far:
 
 - **Zero Trust / Access Control:** Teleport or Traefik ForwardAuth
 
+- **User Access & RBAC (Entra ID):** To maintain strict enterprise non-repudiation and auditing compliance, generic shared administrative accounts (e.g., `admin@`) are strictly prohibited. Access is granted exclusively through named individual "people" identities (e.g., `sam@alsamwrightgmail.onmicrosoft.com`). Application privileges are never assigned directly to the user; instead, access is managed by assigning the Traefik ForwardAuth enterprise application to dedicated Entra ID Security Groups (e.g., `Homelab-Cluster-Admins`), and adding the named identities to those groups.
+
+#### 3. Certificate Management & TLS Strategy
+* **Automated TLS Stack:** Utilizing `cert-manager` integrated with the deSEC DNS-01 ACME challenge webhook to automatically generate Let's Encrypt certificates [3]. 
+* **Certificate Scope (Wildcard):** We are explicitly deploying a wildcard certificate (`*.samjam.dedyn.io`) to cover the entire cluster ingress.
+* **Enterprise Mimesis Deviation (Accepted Risk):** In a strict enterprise environment, utilizing a wildcard certificate violates the Principle of Least Required Scope (Least Privilege), as compromising the private key exposes the blast radius of all subdomains.
+* **Trade-off Justification:**
+  * **Automation & Velocity:** Allows the Traefik Ingress controller [3] to dynamically secure new subdomains (e.g., `auth.samjam.dedyn.io`, `vault.samjam.dedyn.io`) without triggering a new Let's Encrypt API challenge per service.
+  * **Rate Limiting:** Prevents hitting strict Let's Encrypt API throttling limits (e.g., 5 failures per hour) during frequent homelab teardown and rebuild cycles.
+  * **Risk Mitigation:** The private key is generated and stored exclusively within the K3s cluster's internal storage as a Kubernetes Secret (`samjam-dedyn-io-tls`). It is managed automatically by `cert-manager` and never manually leaves the cluster environment.
+
+
 ## Your Task:
 
 Acts as my expert Cloud/DevOps Architect. Help me continue designing, deploying, and configuring this K3s homelab, keeping enterprise best practices, resource constraints, and Azure-aligned architectural patterns top of mind  
