@@ -1,0 +1,14 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: wildcard-samjam-cert
+  namespace: cert-manager
+spec:
+  commonName: samjam.dedyn.io
+  dnsNames:
+    - samjam.dedyn.io
+    - "*.samjam.dedyn.io"
+  issuerRef:
+    name: letsencrypt-production
+    kind: ClusterIssuer
+  secretName: samjam-dedyn-io-tls

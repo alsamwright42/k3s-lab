@@ -1,0 +1,111 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: traefik-forward-auth
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: traefik-forward-auth
+  template:
+    metadata:
+      labels:
+        app: traefik-forward-auth
+    spec:
+      nodeSelector:
+        workload-type: "infra"
+      tolerations:
+        - key: "node-role.kubernetes.io/control-plane"
+          operator: "Equal"
+          value: "true"
+          effect: "NoSchedule"
+      containers:
+      - name: traefik-forward-auth
+        image: thomseddon/traefik-forward-auth:2
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: 100m
+            memory: 128Mi
+        env:
+        - name: DEFAULT_PROVIDER
+          value: oidc
+        - name: PROVIDERS_OIDC_ISSUER_URL
+          valueFrom:
+            secretKeyRef:
+              name: entra-id-credentials
+              key: oidc-issuer
+        - name: PROVIDERS_OIDC_CLIENT_ID
+          valueFrom:
+            secretKeyRef:
+              name: entra-id-credentials
+              key: client-id
+        - name: PROVIDERS_OIDC_CLIENT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: entra-id-credentials
+              key: client-secret
+        - name: SECRET
+          valueFrom:
+            secretKeyRef:
+              name: entra-id-credentials
+              key: cookie-secret
+        - name: AUTH_HOST
+          value: auth.samjam.dedyn.io
+        - name: URL_PATH
+          value: /_oauth
+        ports:
+        - containerPort: 4181
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: traefik-forward-auth
+  namespace: default
+spec:
+  ports:
+  - port: 4181
+    targetPort: 4181
+  selector:
+    app: traefik-forward-auth
+---
+# The Traefik Middleware that we will attach to applications
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: entra-forward-auth
+  namespace: default
+spec:
+  forwardAuth:
+    address: http://traefik-forward-auth:4181
+    trustForwardHeader: true
+    authResponseHeaders:
+      - X-Forwarded-User
+---
+# The Ingress routing traffic for the authentication callbacks
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: traefik-forward-auth-ingress
+  namespace: default
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+spec:
+  tls:
+    - hosts:
+        - auth.samjam.dedyn.io
+      secretName: samjam-dedyn-io-tls
+  rules:
+    - host: auth.samjam.dedyn.io
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: traefik-forward-auth
+                port:
+                  number: 4181
