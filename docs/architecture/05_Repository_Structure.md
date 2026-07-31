@@ -22,6 +22,9 @@ k3s-lab/
 │   ├── apps/
 │   └── base/
 └── scripts/
+|   ├── azure/
+|   ├── bare-metal/
+│   └── workstation/
 ```
 
 ## Directory Purposes
@@ -39,6 +42,9 @@ k3s-lab/
 * **`manifests/`**: Declarative Kubernetes YAML manifests. **Must use dedicated subfolders per application/workload in the apps and base subfolders** (e.g., `manifests/apps/vaultwarden/`). Flat-filing is prohibited.
   * **`manifests/base/`**: Core deployments like `cert-manager` and test workloads.
   * **`manifests/apps/`**: User workloads. 
-* **`scripts/`**: Automation and bootstrapping scripts for provisioning nodes and clusters (e.g., `bootstrap.sh`, `provision-node.sh`).
+* **`scripts/`**: Automation and bootstrapping scripts. Scripts must be idempotent. All scripts must be in subfolders.
+  * **`scripts/azure`** Imperative bash scripts for Azure tasks that cannot be handled by Terraform (e.g `sync-azure-secrets.sh`)
+  * **`scripts/bare-metal`** Scripts strictly responsible for the physical Dell hardware, OS-level configuration, and local systemd services (e.g., `bootstrap.sh`, `provision-node.sh`).
+  * **`scripts/workstation`** Scripts for preparing the management hardware with the required toolchain. In the current scenario this is Ubuntu WSL on a Dell Windows laptop. (e.g. `setup-workstation.sh`).
 
 ```
