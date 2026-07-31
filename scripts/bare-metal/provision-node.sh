@@ -1,6 +1,23 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+echo "=== Installing OS Dependencies and Docker Engine ==="
+sudo apt-get update
+sudo apt-get install -y curl apt-transport-https ca-certificates software-properties-common
+
+# Install Docker Engine if it is not already installed
+if ! command -v docker &> /dev/null; then
+    echo "--> Docker not found. Installing native Docker Engine..."
+    curl -fsSL https://get.docker.com | sudo sh
+    sudo systemctl enable docker
+    sudo systemctl start docker
+else
+    echo "--> Docker is already installed."
+fi
+
+# Add the sysop user to the docker group so you don't need sudo for docker commands
+sudo usermod -aG docker sysop
+
 echo "=== Provisioning Cluster Node OS Security & Helper Scripts ==="
 
 # 1. Create the administrative group & assign user
