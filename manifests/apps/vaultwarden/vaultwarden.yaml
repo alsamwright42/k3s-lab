@@ -1,47 +1,25 @@
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: vaultwarden
-  namespace: default
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: vaultwarden
-  template:
-    metadata:
-      labels:
-        app: vaultwarden
-    spec:
-      nodeSelector:
-        workload-type: compute
-      containers:
-      - name: vaultwarden
-        image: vaultwarden/server:latest
-        env:
-        - name: WEBSOCKET_ENABLED
-          value: "true"
-        ports:
-        - containerPort: 80
-        resources:           # <--- ADDED RESOURCE LIMITS
-          requests:
-            cpu: 50m
-            memory: 64Mi
-          limits:
-            cpu: 200m
-            memory: 128Mi
----
 apiVersion: v1
 kind: Service
 metadata:
-  name: vaultwarden
+  name: vaultwarden-external
   namespace: default
 spec:
   ports:
-  - port: 80
-    targetPort: 80
-  selector:
-    app: vaultwarden
+    - port: 8080
+      targetPort: 8080
+      protocol: TCP
+---
+apiVersion: v1
+kind: Endpoints
+metadata:
+  name: vaultwarden-external
+  namespace: default
+subsets:
+  - addresses:
+      # The static IP of KC02 where Docker is running
+      - ip: 192.168.1.51
+    ports:
+      - port: 8080
 ---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
@@ -49,9 +27,8 @@ metadata:
   name: vaultwarden-ingress
   namespace: default
   annotations:
-    traefik.ingress.kubernetes.io/router.entrypoints: websecure
-    # THIS is the magic line that triggers your flawless ForwardAuth code!
-    traefik.ingress.kubernetes.io/router.middlewares: default-entra-forward-auth@kubernetescrd
+    cert-manager.io/cluster-issuer: letsencrypt-production
+    # Notice: We intentionally omitted the Entra ID ForwardAuth middleware
 spec:
   tls:
     - hosts:
@@ -65,6 +42,6 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: vaultwarden
+                name: vaultwarden-external
                 port:
-                  number: 80
+                  number: 8080

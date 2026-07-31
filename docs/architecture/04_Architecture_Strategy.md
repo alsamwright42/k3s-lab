@@ -9,7 +9,7 @@ Here is our current architecture plan, context, and decisions made so far:
 
 - **Control Plane Node:** Tainted with `node-role.kubernetes.io/control-plane:NoSchedule` for stability, but using tolerations and strict resource limits to run lightweight core infra utilities (Traefik, Portainer, Authentik/IdP) locally. Heavy user workloads are pinned to the worker node via `nodeSelector`.
 
-- **Host OS vs. K8s:** Hardware-dependent apps (e.g., 3D printing/Klipper via USB/serial) run directly on the host OS via `systemd` or Docker to avoid hardware pass-through issues, and are exposed externally via Traefik Ingress.
+- **Host OS vs. K8s:** Hardware-dependent apps (e.g., 3D printing/Klipper via USB/serial) run directly on the host OS via `systemd` or Docker to avoid hardware pass-through issues, and are exposed externally via Traefik Ingress. Critical management/security plane tools (like `VaultWarden`) also run on Docker on the host to ensure break-glass survival.
 
 ## 2. Identity Provider (IdP) &amp; Security Stack
 
@@ -30,6 +30,8 @@ Here is our current architecture plan, context, and decisions made so far:
 - **Zero Trust / Access Control:** Teleport or Traefik ForwardAuth
 
 - **User Access & RBAC (Entra ID):** To maintain strict enterprise non-repudiation and auditing compliance, generic shared administrative accounts (e.g., `admin@`) are strictly prohibited. Access is granted exclusively through named individual "people" identities (e.g., `sam@alsamwrightgmail.onmicrosoft.com`). Application privileges are never assigned directly to the user; instead, access is managed by assigning the Traefik ForwardAuth enterprise application to dedicated Entra ID Security Groups (e.g., `Homelab-Cluster-Admins`), and adding the named identities to those groups.
+
+- **Exemptions:** `VaultWarden` is exempted from the ForwardAuth boundary to allow native mobile app and family access.
 
 #### 3. Certificate Management & TLS Strategy
 * **Automated TLS Stack:** Utilizing `cert-manager` integrated with the deSEC DNS-01 ACME challenge webhook to automatically generate Let's Encrypt certificates [3]. 

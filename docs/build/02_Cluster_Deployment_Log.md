@@ -9,5 +9,5 @@
 | External Secrets Operator (ESO) | kc01 | Tier 3 (Secret Management) | Planned | Next Step: Syncing Azure Key Vault to cluster |
 | Microsoft Entra ID Integration | kc01 | Tier 4 (Identity & Access) | In Progress | App Registration built; ForwardAuth deployment pending |
 | Portainer | kc01 | Tier 5 (Management) | Active | Deployed via Helm |
-| Vaultwarden | kc02 | Tier 5 (Applications) | Planned | Password vault, backed by KeePass .kdbx |
+| Vaultwarden | kc02 | Tier 5 (Applications) | Active | Standalone Docker deployment on KC02. Routed via K3s ExternalName Service and Endpoints. |
 | Observability Stack | kc01, kc02 | Tier 5 (Observability) | Planned | Prometheus/Grafana Loki |

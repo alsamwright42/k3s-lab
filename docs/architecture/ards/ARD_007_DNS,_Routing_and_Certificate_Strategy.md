@@ -22,4 +22,4 @@ Establishing secure internal communications, external ingress routing, and autom
 
 ### 4. Hybrid Password Vault Architecture
 * **The Issue:** Depending entirely on a self-hosted cluster for password management risks a complete lockout during a total cluster hardware failure.
-* **The Solution:** **Vaultwarden** acts as the live, user-friendly daily driver within the K3s cluster. A CronJob is configured to automate encrypted backups to a standalone `.kdbx` (KeePass) file, ensuring full offline "break-glass" recovery.
+* **The Solution:** **Vaultwarden** acts as the live, user-friendly daily usage manager as a standalone Docker service on `kc02`. A CronJob is configured to automate encrypted backups to a standalone `.kdbx` (KeePass) file, ensuring full offline "break-glass" recovery.
