@@ -10,7 +10,7 @@ Establishing secure internal communications, external ingress routing, and autom
 
 ### 1. Split-Horizon DNS
 * **The Issue:** Pinging internal nodes via their public FQDNs routes traffic out to the ISP and relies on NAT hairpinning to return, which can break node-to-node communication if the external link drops.
-* **The Solution:** OpenWrt `dnsmasq` serves a dedicated `.lan` zone internally. This isolates internal cluster traffic (e.g., `kc01.lan`) strictly to the local `192.168.1.0/24` subnet while leaving `samjam.dedyn.io` strictly for external WAN routing.
+* **The Solution:** Pi-hole (via standalone Docker) is now intercepting Split-Horizon DNS requests for *.samjam.dedyn.io and rewriting them to the cluster IP, while Keepalived ensures the DNS service is highly available on VIP 192.168.1.53.
 
 ### 2. Disabling UFW on K3s Nodes
 * **The Issue:** Running `ufw` on Kubernetes nodes causes iptables conflicts with the Flannel CNI, dropping pod-to-pod and overlay network traffic.

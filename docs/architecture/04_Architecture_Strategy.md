@@ -9,7 +9,7 @@ Here is our current architecture plan, context, and decisions made so far:
 
 - **Control Plane Node:** Tainted with `node-role.kubernetes.io/control-plane:NoSchedule` for stability, but using tolerations and strict resource limits to run lightweight core infra utilities (Traefik, Portainer, Authentik/IdP) locally. Heavy user workloads are pinned to the worker node via `nodeSelector`.
 
-- **Host OS vs. K8s:** Hardware-dependent apps (e.g., 3D printing/Klipper via USB/serial) run directly on the host OS via `systemd` or Docker to avoid hardware pass-through issues, and are exposed externally via Traefik Ingress. Critical management/security plane tools (like `VaultWarden`) also run on Docker on the host to ensure break-glass survival.
+- **Host OS vs. K8s:** Hardware-dependent apps (e.g., 3D printing/Klipper via USB/serial) run directly on the host OS via `systemd` or Docker to avoid hardware pass-through issues, and are exposed externally via Traefik Ingress. Critical management/security plane tools (`VaultWarden`, `Pi-hole`, `Keepalived`) also run on Docker on the host to ensure break-glass survival.
 
 ## 2. Identity Provider (IdP) &amp; Security Stack
 
