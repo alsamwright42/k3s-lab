@@ -3,7 +3,7 @@ set -euo pipefail
 
 echo "=== Installing OS Dependencies and Docker Engine ==="
 sudo apt-get update
-sudo apt-get install -y curl apt-transport-https ca-certificates software-properties-common
+sudo apt-get install -y curl ca-certificates gnupg
 
 # Install Docker Engine if it is not already installed
 if ! command -v docker &> /dev/null; then

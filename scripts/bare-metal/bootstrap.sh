@@ -2,7 +2,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE}")" && pwd)"
-REPO_ROOT="$(dirname "$SCRIPT_DIR")"
+REPO_ROOT="$(cd "$(dirname "$SCRIPT_DIR")/.." && pwd)"
 
 # Generic smart polling function
 # Usage: wait_for_condition <retries> <wait_interval_seconds> <"Status Message"> <command...>

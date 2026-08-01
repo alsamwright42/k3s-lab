@@ -3,8 +3,11 @@ set -euo pipefail
 
 # Anchor paths to the script directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE}")" && pwd)"
-TF_DIR="${SCRIPT_DIR}/../infrastructure/terraform"
-MANIFEST_DIR="${SCRIPT_DIR}/../manifests/base/external-secrets"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+
+# Define clean absolute paths for Terraform and manifest directories
+TF_DIR="${REPO_ROOT}/infrastructure/terraform"
+MANIFEST_DIR="${REPO_ROOT}/manifests/base/external-secrets"
 
 echo "=== Syncing Azure Key Vault Credentials to K3s ==="
 
