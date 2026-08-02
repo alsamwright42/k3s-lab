@@ -99,7 +99,6 @@ metadata:
   namespace: default
   annotations:
     traefik.ingress.kubernetes.io/router.entrypoints: websecure
-    traefik.ingress.kubernetes.io/router.middlewares: default-entra-forward-auth@kubernetescrd
 spec:
   tls:
     - hosts:

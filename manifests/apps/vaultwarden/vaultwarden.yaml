@@ -28,7 +28,7 @@ metadata:
   namespace: default
   annotations:
     cert-manager.io/cluster-issuer: letsencrypt-production
-    # Notice: We intentionally omitted the Entra ID ForwardAuth middleware
+    traefik.ingress.kubernetes.io/router.middlewares: ""
 spec:
   tls:
     - hosts:
