@@ -37,16 +37,40 @@ for script in "${SCRIPT_DIR}"/*.sh; do
     fi
 done
 
-# Infrastructure Inventory
-CONTROL_PLANE_NODE="kc01"
-export CONTROL_PLANE_IP="192.168.1.50"
+echo "=== Validating and Parsing Node Inventory ==="
+declare -A CLUSTER_NODES
 
-declare -A WORKER_NODES=(
-    ["kc02"]="192.168.1.51"
-)
+# Validate and Register Control Plane
+if [ -z "${CONTROL_PLANE_NODE:-}" ]; then
+    echo "FAILED: CONTROL_PLANE_NODE is missing from global.env!"
+    exit 1
+fi
+
+declare -A WORKER_NODES
+
+# Validate and Parse Worker Nodes
+for record in $WORKER_NODES_CONFIG; do
+    IFS=':' read -r node ip <<< "$record"
+    
+    # FAIL EARLY: Check if the string was malformed (missing node or IP)
+    if [ -z "${node:-}" ] || [ -z "${ip:-}" ]; then
+        echo "FAILED: Malformed worker record '$record'. Expected format 'hostname:IP'."
+        exit 1
+    fi
+    
+    # Register the worker and dynamically build its config file name
+    WORKER_NODES["$node"]="$ip"
+done
+
+# Create cluster node list
+CLUSTER_NODES=("CONTROL_PLANE_NODE" "${!WORKER_NODES[@]}")
 
 echo "=== K3s Lab Connectivity Check ==="
-for node in "$CONTROL_PLANE_NODE" "${!WORKER_NODES[@]}"; do
+# Check Control Plane
+echo -n "Testing SSH connection to ${CONTROL_PLANE_NODE}... "
+if ssh -n -q -o BatchMode=yes -o ConnectTimeout=5 "${CONTROL_PLANE_NODE}" exit; then echo "
+
+for node in "${CLUSTER_NODES[@]}"; do
     echo -n "Testing SSH connection to ${node}... "
     if ssh -n -q -o BatchMode=yes -o ConnectTimeout=5 "${node}" exit; then
         echo "OK"
@@ -58,7 +82,7 @@ done
 
 echo ""
 echo "=== Provisioning Remote Host Environments ==="
-for node in "$CONTROL_PLANE_NODE" "${!WORKER_NODES[@]}"; do
+for node in "${CLUSTER_NODES[@]}"; do
     echo "--> Provisioning ${node}..."
     scp -o BatchMode=yes "${SCRIPT_DIR}/provision-node.sh" "${node}:/tmp/provision-node.sh"
     scp -o BatchMode=yes "${SCRIPT_DIR}/apply-k3s-node-config.sh" "${node}:/tmp/apply-k3s-node-config.sh"
@@ -97,7 +121,7 @@ echo "=== Node Bootstrap Complete ==="
 echo "Verifying all registered nodes are Ready..."
 
 # Loop through every node in the associative array
-for target_node in "$CONTROL_PLANE_NODE" "${!WORKER_NODES[@]}"; do
+for target_node in "${CLUSTER_NODES[@]}"; do
     wait_for_condition 15 4 "Node ${target_node} to report as Ready" \
         ssh -n -o BatchMode=yes kc01 "sudo k3s kubectl get nodes 2>/dev/null | grep -E '^${target_node}\s+.*Ready'"
 done

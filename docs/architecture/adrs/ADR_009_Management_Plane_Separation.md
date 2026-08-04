@@ -12,6 +12,7 @@ Vaultwarden was initially deployed inside the K3s cluster behind Traefik Forward
 Vaultwarden was removed from the K3s cluster workloads and migrated to run as a standalone Docker container directly on the host OS of the worker node (`kc02`). 
 To maintain automated wildcard TLS via cert-manager, we utilized the Kubernetes "External Service" pattern. We created a `Service` and `Endpoints` object in K3s that tells Traefik to terminate the SSL for `vault.samjam.dedyn.io` and route the raw traffic out of the cluster to the standalone Docker port on `kc02`, explicitly omitting the Entra ID ForwardAuth middleware.
 Pi-hole runs as a standalone docker container on the host OS of both cluster nodes. While this is not wholly desirable for the control-plane it is necessary for high availability.
+
 #### Consequences
 *   **Usability:** Family members can now use native Bitwarden mobile apps and browser extensions frictionlessly.
 *   **Resilience:** If K3s crashes, the Vaultwarden Docker container remains online and accessible via the host's direct IP. By employing `Keepalived` the pi-hole containers will remain online providing DNS for the network.

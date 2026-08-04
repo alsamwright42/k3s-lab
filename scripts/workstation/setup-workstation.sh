@@ -28,20 +28,7 @@ echo "Adding External Secrets Helm repository..."
 helm repo add external-secrets https://charts.external-secrets.io
 helm repo update
 
-# 6. Verify local environment variables
-echo "Verifying local .env file and tokens..."
-if [ ! -f "${REPO_ROOT}/.env" ]; then
-    echo "WARNING: .env file not found at repository root!"
-    echo "Please create it and add DESEC_API_TOKEN=your_token"
-else
-    if grep -q "DESEC_API_TOKEN" "${REPO_ROOT}/.env"; then
-        echo "OK: DESEC_API_TOKEN found in .env"
-    else
-        echo "WARNING: DESEC_API_TOKEN is missing from .env!"
-    fi
-fi
-
-# 7. Install the Terraform CLI (Official HashiCorp Repository)
+# 6. Install the Terraform CLI (Official HashiCorp Repository)
 echo "Installing Terraform CLI..."
 # Install prerequisite packages
 sudo apt-get update && sudo apt-get install -y gnupg software-properties-common curl
@@ -58,7 +45,7 @@ sudo apt-get update && sudo apt-get install -y terraform
 echo "Terraform installation complete. Version:"
 terraform -version
 
-# 8. Install the Azure CLI
+# 7. Install the Azure CLI
 echo "Installing Azure CLI..."
 # Download the script to a temporary file first
 curl -sL https://aka.ms/InstallAzureCLIDeb -o /tmp/install-az.sh
@@ -69,3 +56,9 @@ rm /tmp/install-az.sh
 
 echo "Azure CLI installation complete. Version:"
 az version
+
+# 8. Install make
+echo "Installing Make..."
+sudo apt-get update && sudo apt-get install -y make
+echo "Make installation complete. Version:"
+make --version

@@ -5,11 +5,6 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE}")" && pwd)"
 REPO_ROOT="$(dirname "$SCRIPT_DIR")"
 
-VW_NODE="kc02"
-VW_IP="192.168.1.51"
-VW_PORT="8080"
-VW_DATA_DIR="/opt/vaultwarden/data"
-
 echo "=== Deploying Standalone Vaultwarden on ${VW_NODE} ==="
 
 # ADR 011 Rule 1: No Error Swallowing (We allow 'true' only to permit first-time clean deployment)

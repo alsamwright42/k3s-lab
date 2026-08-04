@@ -10,5 +10,5 @@
 | Microsoft Entra ID Integration | kc01 | Tier 4 (Identity & Access) | Active | App Registration built; ForwardAuth deployment pending |
 | Portainer | kc01 | Tier 5 (Management) | Active | Deployed via Helm |
 | Vaultwarden | kc02 | Tier 5 (Applications) | Active | Standalone Docker deployment on KC02. Routed via K3s ExternalName Service and Endpoints. |
-| Vaultwarden break glass backup | kc02 | Tier 5 (Applications) | In Progress | Backup up secret store to encrypted keepassxc archive. |
+| Vaultwarden break glass backup | kc02 | Tier 5 (Applications) | Active | Backup up secret store to encrypted keepassxc archive. |
 | Observability Stack | kc01, kc02 | Tier 5 (Observability) | Planned | Prometheus/Grafana Loki |

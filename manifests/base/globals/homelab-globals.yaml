@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: homelab-globals
+  namespace: default
+data:
+  VW_BACKUP_REMOTE_TYPE: "${VW_BACKUP_REMOTE_TYPE}"
+  VW_BACKUP_LOCATION: "${VW_BACKUP_LOCATION}"
+  VW_URL: "${VW_URL}"

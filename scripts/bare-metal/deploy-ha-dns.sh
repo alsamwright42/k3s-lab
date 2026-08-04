@@ -1,17 +1,23 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-VIP="192.168.1.53"
-INTERFACE="enp0s31f6"
-DOMAIN="samjam.dedyn.io"
-PIHOLE_PW="admin" # You can change this later in the UI or leave as is
+echo "=== Validating and Parsing HA Node Inventory ==="
+declare -A HA_NODES
 
-# Define nodes with Keepalived state and priority
-# Format: [hostname]="STATE:PRIORITY"
-declare -A HA_NODES=(
-    ["kc01"]="MASTER:100"
-    ["kc02"]="BACKUP:90"
-)
+# Rebuild the associative array from the flat string in global.env
+for record in $HA_NODES_CONFIG; do
+    # Extract the three pieces of data separated by colons
+    IFS=':' read -r node state priority <<< "$record"
+    
+    # Fail early if the string is malformed
+    if [ -z "${node:-}" ] || [ -z "${state:-}" ] || [ -z "${priority:-}" ]; then
+        echo "FAILED: Malformed HA node record '$record'. Expected format 'hostname:STATE:PRIORITY'."
+        exit 1
+    fi
+    
+    # Reconstruct the exact format your script originally used
+    HA_NODES["$node"]="${state}:${priority}"
+done
 
 echo "=== Deploying High-Availability DNS (Keepalived + Pi-hole) ==="
 
