@@ -54,3 +54,8 @@ terraform.rc
 # Built Visual Studio Code Extensions
 *.vsix
 
+# Python compilation and test cache
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/

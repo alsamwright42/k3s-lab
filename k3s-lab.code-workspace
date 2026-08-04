@@ -49,7 +49,15 @@
     },
     "files.eol": "\n",
     "yaml.schemas": {
-      "kubernetes": "manifests/**/*.yaml"
+      // Map standard manifests, but explicitly exclude kustomization and values files
+      "kubernetes": [
+        "manifests/base/**/*.yaml", 
+        "manifests/apps/**/*.yaml",
+        "!**/kustomization.yaml",
+        "!**/*values.yaml"
+      ],
+      // Correctly map Kustomization files to their dedicated Schemastore spec
+      "https://json.schemastore.org/kustomization": "**/kustomization.yaml"
     },
     "editor.tabSize": 2,
     "editor.insertSpaces": true,

@@ -1,0 +1,35 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: argocd
+
+resources:
+  - namespace.yaml
+  # Declaratively pulls the official v3.4.6 stable release manifest
+  - https://raw.githubusercontent.com/argoproj/argo-cd/v3.4.6/manifests/install.yaml
+  - ../globals
+  - repo-secret.yaml
+  - root-application.yaml
+
+
+patches:
+  - path: patches/control-plane-scheduling.yaml
+  - path: patches/resource-limits.yaml
+
+# Dynamically routes non-sensitive ConfigMap values into your manifests
+replacements:
+  - source:
+      kind: ConfigMap
+      name: homelab-globals
+      fieldPath: data.GIT_REPO_URL
+    targets:
+      - select:
+          kind: ExternalSecret
+          name: argocd-private-repo-credentials
+        fieldPaths:
+          - spec.target.template.data.url
+      - select:
+          kind: Application
+          name: root-application
+        fieldPaths:
+          - spec.source.repoURL

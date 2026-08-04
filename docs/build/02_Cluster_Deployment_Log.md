@@ -11,6 +11,6 @@
 | Portainer | kc01 | Tier 5 (Management) | Active | Deployed via Helm |
 | Vaultwarden | kc02 | Tier 5 (Applications) | Active | Standalone Docker deployment on KC02. Routed via K3s ExternalName Service and Endpoints. |
 | Vaultwarden break glass backup | kc02 | Tier 5 (Applications) | Active | Backup up secret store to encrypted keepassxc archive. |
-| GitOps Controller Arco | kc01 | Tier 5 (Management) | Planned |  |
+| GitOps Controller Arco | kc01 | Tier 5 (Management) | Active | ArgoCD deployed through the makefile |
 | Observability Stack | kc01, kc02 | Tier 5 (Observability) | Planned | Prometheus/Grafana Loki |
 | Backup Solution | kc01, kc02 | Tier ? | Planning | ?? |

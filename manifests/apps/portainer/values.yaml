@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=none
 # manifests/apps/portainer/values.yaml
 
 # 1. Pin the workload specifically to the infra/control plane node
