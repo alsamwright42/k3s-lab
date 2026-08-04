@@ -12,3 +12,4 @@
 | Vaultwarden | kc02 | Tier 5 (Applications) | Active | Standalone Docker deployment on KC02. Routed via K3s ExternalName Service and Endpoints. |
 | Vaultwarden break glass backup | kc02 | Tier 5 (Applications) | Active | Backup up secret store to encrypted keepassxc archive. |
 | Observability Stack | kc01, kc02 | Tier 5 (Observability) | Planned | Prometheus/Grafana Loki |
+| Backup Solution | kc01, kc02 | Tier ? | Planning | ?? |

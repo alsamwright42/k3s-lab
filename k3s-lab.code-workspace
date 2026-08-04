@@ -1,0 +1,69 @@
+{
+  "folders": [
+    {
+      "name": "01. Cluster Manifests (GitOps)",
+      "path": "manifests"
+    },
+    {
+      "name": "02. Host Automation Scripts",
+      "path": "scripts"
+    },
+    {
+      "name": "03. Infrastructure & Provisioning",
+      "path": "infrastructure"
+    },
+    {
+      "name": "04. Core Cluster Configs",
+      "path": "core/k3s-config"
+    },
+    {
+      "name": "05. Inventory & Hosts",
+      "path": "inventory"
+    },
+    {
+      "name": "06. Documentation",
+      "path": "docs"
+    },
+    {
+      "name": "Project Root",
+      "path": "."
+    }
+  ],
+  "settings": {
+    "files.exclude": {
+      "**/.git": true,
+      "**/.terraform": true,
+      "**/*.tfstate": true,
+      "**/*.tfstate.backup": true,
+      "**/.vagrant": true,
+      "**/node_modules": true,
+      "**/__pycache__": true
+    },
+    "files.associations": {
+      "*.yaml": "yaml",
+      "*.yml": "yaml",
+      "*.ini": "properties",
+      "*.sh": "shellscript",
+      "*.pkr.hcl": "terraform",
+      "*.tf": "terraform"
+    },
+    "files.eol": "\n",
+    "yaml.schemas": {
+      "kubernetes": "manifests/**/*.yaml"
+    },
+    "editor.tabSize": 2,
+    "editor.insertSpaces": true,
+    "editor.detectIndentation": false,
+    "editor.renderWhitespace": "selection",
+    "telemetry.telemetryLevel": "off"
+  },
+  "extensions": {
+    "recommendations": [
+      "redhat.vscode-yaml",
+      "ms-kubernetes-tools.vscode-kubernetes-tools",
+      "hashicorp.terraform",
+      "mhutchie.git-graph",
+      "timonwong.shellcheck"
+    ]
+  }
+}
