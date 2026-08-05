@@ -1,4 +1,4 @@
-### ARD 009: Management Plane Separation (Vaultwarden, Pi-hole)
+### ADR 009: Management Plane Separation (Vaultwarden, Pi-hole)
 
 #### Status
 Active

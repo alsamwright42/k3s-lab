@@ -1,4 +1,4 @@
-# ARD 004: Infrastructure as Code (IaC) Boundaries and Terraform Adoption
+# ADR 004: Infrastructure as Code (IaC) Boundaries and Terraform Adoption
 
 ## Status
 Active

@@ -1,4 +1,4 @@
-# ARD 005: Azure Identity & Terraform Deployment Strategy
+# ADR 005: Azure Identity & Terraform Deployment Strategy
 
 ## Status
 Active

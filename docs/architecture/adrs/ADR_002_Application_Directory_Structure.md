@@ -1,4 +1,4 @@
-# ARD 002: Application Manifest Directory Structure
+# ADR 002: Application Manifest Directory Structure
 
 ## Status
 Active

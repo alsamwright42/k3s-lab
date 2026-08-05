@@ -1,4 +1,4 @@
-# ARD 003: Zero-Trust Proxy & TLS Namespace Architecture
+# ADR 003: Zero-Trust Proxy & TLS Namespace Architecture
 
 ## Status
 Active

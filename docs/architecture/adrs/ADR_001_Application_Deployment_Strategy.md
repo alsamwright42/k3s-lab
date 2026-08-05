@@ -1,4 +1,4 @@
-# ARD 001: Application Deployment Strategy (Vaultwarden)
+# ADR 001: Application Deployment Strategy (Vaultwarden)
 
 ## Status
 **Superseded by ARD 009: Management Plane Separation**
