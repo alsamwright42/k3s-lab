@@ -1,6 +1,6 @@
 ---
 name: "🎯 Epic Tracking"
-description: Track a high-level operational milestone or phase
+about: Track a high-level operational milestone or phase
 title: "Epic: [Epic Name]"
 labels: ["epic"]
 assignees: ""
