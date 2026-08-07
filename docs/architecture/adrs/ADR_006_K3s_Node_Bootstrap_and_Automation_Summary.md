@@ -1,4 +1,4 @@
-# ARD 006: K3s Node Bootstrap & Automation Strategy
+# ADR 006: K3s Node Bootstrap & Automation Strategy
 
 ## Status
 Active

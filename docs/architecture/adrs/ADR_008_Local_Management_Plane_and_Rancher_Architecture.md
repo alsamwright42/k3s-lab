@@ -1,4 +1,4 @@
-# ARD 008: Local Management Plane & Rancher Architecture
+# ADR 008: Local Management Plane & Rancher Architecture
 
 ## Status
 Active

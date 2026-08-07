@@ -1,18 +1,39 @@
 # Homelab Cluster Operations Makefile
 # Fulfills Technical Debt #4: Centralize Global Configuration
 
-# Define the source file and the temporary build artifact
-ENV_FILE ?= inventory/global.env
+# =============================================================================
+# ⚙️ CONFIGURATION VARIABLES
+# =============================================================================
+
+## [Optional] Target environment profile. Maps to any 'inventory/<name>.env' file. Default: local
+PROFILE ?= local
+## [Optional] Bypass safety checks and run-once safety locks. Choices: [true, false]. Default: false
+FORCE ?= false
+## [Optional] CI/CD Mode. Bypasses local file-sourcing. Choices: [true, false]. Default: false
+CI ?= false 		  
+
+ENV_FILE := inventory/$(PROFILE).env
+
+# Define the temporary build artifact
 CLEAN_ENV := /tmp/clean.env
 
-# Create the clean environment file BEFORE Make evaluates anything else
-$(info $(shell ./scripts/workstation/sanitize-env.sh $(ENV_FILE) $(CLEAN_ENV)))
+# Environment loader
+ifeq ($(CI),true)
+  # 🟢 CI/CD Mode: Bypass local file-sourcing entirely.
+  # Inherit pristine variables/secrets injected directly into the runner's memory.
+  $(info === CI/CD Mode: Inheriting environment variables from runner ===)
+else ifeq ($(wildcard ./scripts/workstation/sanitize-env.sh),)
+  # 🟡 Sandbox Mode: Fallback if the script is missing (e.g., this agent session).
+	$(info === Sandbox Mode: Using default environment variables ===)
+else
+  # 💻 Local Workstation Mode: Clean, include, and export the selected profile file.
+  $(info === Local Workstation Mode: Sanitizing and loading $(ENV_FILE) ===)
+  $(info $(shell ./scripts/workstation/sanitize-env.sh $(ENV_FILE) $(CLEAN_ENV)))
+  include $(CLEAN_ENV)
+  export
+endif
 
-# Load global variables
-include $(CLEAN_ENV)
-export
-
-# 2. Centralized staging files in a secure, unprivileged directory
+# Centralized staging files in a secure, unprivileged directory
 STAGE := /tmp/kustomize-argocd.yaml
 STAGE_CORE := /tmp/kustomize-argocd-core.yaml
 DAY0_LOCK := /etc/rancher/k3s/.day0_lock
@@ -23,13 +44,17 @@ DAY0_LOCK := /etc/rancher/k3s/.day0_lock
         check-day0-lock write-day0-lock \ 
 				provision-nodes deploy-ha-dns sync-azure-secrets apply-globals \
         kustomize-argocd bootstrap-argocd test \
-				deploy-portainer deploy-vaultwarden deploy-vw-backup 
+				deploy-portainer deploy-vaultwarden deploy-vw-backup \
+				bundle
 
 help: ## Display this help message with target descriptions
 	@echo "=========================================================================="
 	@echo " Homelab Cluster Operations Toolchain"
 	@echo "=========================================================================="
-	@echo "Usage: make <target> [FORCE=true]"
+	@echo "Usage: make <target> [VARIABLE=value] [PROFILE=]"
+	@echo ""
+	@echo "Variables:"
+	@grep -h -E '^[a-zA-Z0-9_-]+ \?=.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = " \\?=.*?## "}; {printf "  \033[36m%-22s\033[0m %s\n", $$1, $$2}'
 	@echo ""
 	@echo "Targets:"
 	@grep -h -E '^[a-zA-Z0-9_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-22s\033[0m %s\n", $$1, $$2}'
@@ -128,12 +153,14 @@ sync-azure-secrets: ## Sync Azure Key Vault credentials to K3s cluster
 	./scripts/azure/sync-azure-secrets.sh
 
 apply-globals: ## Inject homelab global environment ConfigMaps
-	@echo "=== Injecting global configuration from inventory/global.env ==="
+	@echo "=== Injecting global configuration from environment variables ==="
 	envsubst < manifests/base/globals/homelab-globals.yaml | kubectl apply -f -
 
 deploy-vw-backup: ## Deploy standalone Vaultwarden backup CronJob manifest
 	@echo "=== Deploying Vaultwarden Backup CronJob ==="
 	envsubst '$$INGRESS_IP $$DOMAIN $$VW_URL' < manifests/apps/vaultwarden/vaultwarden-backup-cronjob.yaml | kubectl apply -f -
 
-
-
+bundle: ## Bundle the active codebase into a single markdown for AI agent consumption
+	@echo "=== Bundling codebase into a single markdown file ==="
+	./scripts/workstation/bundle-codebase.sh
+	

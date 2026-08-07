@@ -1,4 +1,4 @@
-# ARD 007: DNS, Routing & Certificate Strategy
+# ADR 007: DNS, Routing & Certificate Strategy
 
 ## Status
 Active

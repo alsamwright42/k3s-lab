@@ -1,4 +1,4 @@
-### ARD 012: Vaultwarden Break-Glass Backup User and Scope Strategy
+### ADR 012: Vaultwarden Break-Glass Backup User and Scope Strategy
 
 #### Status
 Active

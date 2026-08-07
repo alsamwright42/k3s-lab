@@ -12,8 +12,9 @@ k3s-lab/
 │   └── k3s-config/
 ├── docs/
 |   └── architecture/
-│       └── ards/
+│   |   └── ards/
 |   └── build/
+|   └── planning/
 ├── infrastructure/
 |   ├── nodes/
 │   └── terraform/
@@ -25,6 +26,11 @@ k3s-lab/
 |   ├── azure/
 |   ├── bare-metal/
 │   └── workstation/
+└── githooks/
+    ├── post-commit
+    ├── post-commit.d/
+    ├── pre-commit
+    └── pre-commit.d/
 ```
 
 ## Directory Purposes
@@ -35,6 +41,7 @@ k3s-lab/
   * **`docs/architecture/`**: Architecture Reference Documents (ARDs), deployment logs, and topology documentation (e.g., `01_Hardware_and_Network_Topology.md`).
     * **`docs/architecture/ards`*: Architecture Reference Documents recording why architectural decisions were made.
   * **`docs/build/`**: Documentation regarding the building of the IAC configuration (e.g.  `02_Cluster_Deployment_Log.md`)
+  * **`docs/planning**: Planning documentation linked to Github
 * **`infrastructure/`**: Infrastructure as Code definitions.
   * **`infrastructure/nodes/`** : Node-specific configurations, including K3s server/agent configs that define taints and labels for `KC01` and `KC02`.
   *   **infrastructure/terraform/** : Declarative Terraform code for provisioning external cloud dependencies (e.g., Azure Key Vault, Entra ID Service Principals).
@@ -46,5 +53,10 @@ k3s-lab/
   * **`scripts/azure`** Imperative bash scripts for Azure tasks that cannot be handled by Terraform (e.g `sync-azure-secrets.sh`)
   * **`scripts/bare-metal`** Scripts strictly responsible for the physical Dell hardware, OS-level configuration, and local systemd services (e.g., `bootstrap.sh`, `provision-node.sh`).
   * **`scripts/workstation`** Scripts for preparing the management hardware with the required toolchain. In the current scenario this is Ubuntu WSL on a Dell Windows laptop. (e.g. `setup-workstation.sh`).
+* **`githooks/`**: Contains the pre and post commit git hooks
+  * **`githooks/post-commit`**: Post commit orchestrator script that compiles the individual feature hooks in `post-commit.d/`
+  * **`githooks/post-commit.d/`**: Individual feature post commit hook scripts
+   * **`githooks/pre-commit`**: Pre commit orchestrator script that compiles the individual feature hooks in `pre-commit.d/`
+  * **`githooks/pre-commit.d`**: Individual feature pre commit hook scripts
 
 ```

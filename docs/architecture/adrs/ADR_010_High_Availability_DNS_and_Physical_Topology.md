@@ -1,4 +1,5 @@
-### ARD 010: High-Availability DNS and Physical Topology
+### ADR 010: High-Availability DNS and Physical Topology
+
 #### Status
 Active
 

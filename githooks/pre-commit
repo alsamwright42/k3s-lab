@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# githooks/pre-commit
+set -euo pipefail
+
+# Safely anchor path to the hook directory (ADR_011 Rule 5)
+HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SUB_HOOKS_DIR="${HOOK_DIR}/pre-commit.d"
+
+if [ -d "$SUB_HOOKS_DIR" ]; then
+    # Iterate through all files in the sub-hooks directory
+    for hook in "${SUB_HOOKS_DIR}"/*; do
+        # only names with alphanumeric, underscore, or hyphen characters are allowed to run. No files with extensions or special characters will be executed.
+        [[ "$(basename "$hook")" =~ ^[0-9a-zA-Z_-]+$ ]] || continue
+        # Only execute if the file exists and is marked executable
+        if [ -x "$hook" ]; then
+            echo "⚓ Running sub-hook: $(basename "$hook")"
+            "$hook"
+        else
+            echo "⚠️  Skipping non-executable task: $(basename "$hook")"
+        fi
+    done
+fi
