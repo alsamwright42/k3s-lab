@@ -1,34 +1,8 @@
 #!/usr/bin/env bash
-# githooks/pre-commit.d/02-shellcheck
-# Automatically audits all tracked Shell scripts for bugs and anti-patterns.
-
 set -euo pipefail
 
-REPO_ROOT="$(git rev-parse --show-toplevel)"
+# Directory Anchoring matching project standard (Explicit  array index)
+HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${HOOK_DIR}/../.." && pwd)"
 
-if ! command -v shellcheck &> /dev/null; then
-    echo "⚠️  [Pre-Commit Guard] 'shellcheck' is not installed!"
-    echo "   To ensure script quality, please install it: sudo apt install shellcheck"
-    echo "   Bypassing audit check for this commit."
-    exit 0
-fi
-
-echo "🔍 Auditing Shell scripts with shellcheck..."
-
-# Locate all tracked .sh files and key hooks
-failed=0
-while IFS= read -r file; do
-    if [ -f "${REPO_ROOT}/${file}" ]; then
-        if ! shellcheck "${REPO_ROOT}/${file}"; then
-            echo "❌ Shellcheck failed on: ${file}"
-            failed=1
-        fi
-    fi
-done < <(git -C "$REPO_ROOT" ls-files '*.sh' 'scripts/**/*.sh' 'githooks/**/*.sh' 'githooks/pre-commit' 'githooks/post-commit' 2>/dev/null)
-
-if [ "$failed" -ne 0 ]; then
-    echo "❌ [Pre-Commit Guard] Shellcheck audit failed! Please fix the errors above before committing."
-    exit 1
-fi
-
-echo "✅ Shellcheck audit completed with zero warnings!"
+"${REPO_ROOT}/scripts/workstation/audit-shellcheck.sh"

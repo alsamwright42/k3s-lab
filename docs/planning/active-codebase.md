@@ -1,6 +1,6 @@
 # 📂 Active Codebase State
 
-Last compiled: 2026-08-05T20:07:34Z
+Last compiled: 2026-08-08T20:25:23Z
 
 This file provides high-density context of tracked configurations for AI alignment.
 
@@ -205,9 +205,6 @@ echo "=== Syncing Azure Key Vault Credentials to K3s ==="
 echo "Extracting data from Terraform..."
 CLIENT_ID=$(terraform -chdir="${TF_DIR}" output -raw client_id)
 CLIENT_SECRET=$(terraform -chdir="${TF_DIR}" output -raw client_secret)
-# shellcheck disable=SC2034
-KEY_VAULT_URI=$(terraform -chdir="${TF_DIR}" output -raw key_vault_uri)
-export KEY_VAUT_URI
 TENANT_ID=$(terraform -chdir="${TF_DIR}" output -raw tenant_id)
 export TENANT_ID
 
@@ -263,7 +260,7 @@ fi```
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$(dirname "$SCRIPT_DIR")/.." && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 # Generic smart polling function
 # Usage: wait_for_condition <retries> <wait_interval_seconds> <"Status Message"> <command...>
@@ -410,7 +407,7 @@ set -euo pipefail
 
 # Set paths
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(dirname "$SCRIPT_DIR")"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 echo "=== Deploying Core Infrastructure Utilities ==="
 
@@ -529,9 +526,6 @@ set -euo pipefail
 
 # ADR 011 Rule 5: Directory Anchoring
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck disable=SC2034
-REPO_ROOT="$(dirname "$SCRIPT_DIR")"
-
 echo "=== Deploying Standalone Vaultwarden on ${VW_NODE} ==="
 
 # ADR 011 Rule 1: No Error Swallowing (We allow 'true' only to permit first-time clean deployment)
@@ -600,6 +594,279 @@ echo "sysop ALL=(ALL) NOPASSWD: /usr/local/bin/apply-k3s-node-config.sh" | sudo 
 sudo chmod 0440 /etc/sudoers.d/k3s-admin-safe
 
 echo "=== Node Provisioning Complete ==="```
+
+---
+
+### 📄 File: scripts/workstation/audit-repo-secrets.sh
+```bash
+#!/usr/bin/env bash
+# scripts/workstation/audit-repo-secrets.sh
+# Audits the local repository for potential secret leaks, untracked files, 
+# and ensures that gitignore rules are actively protecting sensitive files.
+# Aligned with ADR_011 (Automation Standards) and ADR_013 (Secrets Management).
+
+set -euo pipefail
+
+# Force safe environment fallback locales (suppresses locale warnings)
+export LANG=C.UTF-8
+export LC_ALL=C.UTF-8
+
+# ANSI color codes for terminal logging
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+echo -e "${BLUE}=====================================================================${NC}"
+echo -e "${BLUE}🛡️  HOMELAB REPOSITORY SECURITY & SECRETS AUDIT GATE (v3)${NC}"
+echo -e "${BLUE}=====================================================================${NC}"
+
+# Check if inside a git repo
+if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    echo -e "${RED}❌ ERROR: Not inside a Git repository! Run this script from your repository root.${NC}"
+    exit 1
+fi
+
+# Directory Anchoring (ADR 011 Rule 5: Script is 2 levels deep inside scripts/workstation/)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+cd "$REPO_ROOT"
+
+FAILED=0
+
+# Step 1: Active Tracking Audit
+echo -e "\n${BLUE}🔎 Step 1: Checking for actively tracked sensitive files...${NC}"
+# Checks if Git is tracking any files that match sensitive structural patterns
+# Fixes folder path collisions (like external-secrets) by matching specific extensions/filenames
+TRACKED_SECRETS=$(git ls-files | grep -E '(\.tfvars$|\.env$|\.tfstate$|id_rsa|id_ed25519|\.pem$|\.key$|vault-keys\.json|\.kdbx$)' || true)
+
+if [ -n "$TRACKED_SECRETS" ]; then
+    echo -e "${RED}❌ CRITICAL WARNING: Git is actively tracking sensitive files!${NC}"
+    echo -e "${RED}These files are committed or staged and WILL be pushed to your public repository:${NC}"
+    while IFS= read -r file; do
+        [ -z "$file" ] && continue
+        echo -e "  - $file"
+    done <<< "$TRACKED_SECRETS"
+    echo -e "${YELLOW}👉 To stop tracking these files while keeping them locally, run:${NC}"
+    echo -e "   git rm --cached <filename>"
+    FAILED=1
+else
+    echo -e "${GREEN}✅ Clean! No actively tracked sensitive files detected.${NC}"
+fi
+
+# Step 2: Gitignore Enforcement Audit
+echo -e "\n${BLUE}🔎 Step 2: Verifying .gitignore coverage for sensitive files...${NC}"
+# Scans for local credential files that might exist on disk but are not blocked by gitignore rules
+EXISTING_SECRETS=$(find . -type f \( -name "*.env" -o -name "*.tfvars" -o -name "*.tfstate" -o -name "vault-keys.json" -o -name "*.kdbx" \) -not -path '*/.*' -not -path '*/node_modules/*' || true)
+
+if [ -n "$EXISTING_SECRETS" ]; then
+    UNIGNORED_SECRETS=""
+    while IFS= read -r file; do
+        [ -z "$file" ] && continue
+        # git check-ignore returns 0 if ignored, 1 if not ignored
+        if ! git check-ignore -q "$file"; then
+            UNIGNORED_SECRETS="${UNIGNORED_SECRETS}\n  - $file"
+        fi
+    done <<< "$EXISTING_SECRETS"
+
+    if [ -n "$UNIGNORED_SECRETS" ]; then
+        echo -e "${RED}❌ WARNING: Found existing secret files NOT covered by .gitignore:${NC}"
+        echo -e "$UNIGNORED_SECRETS"
+        echo -e "${YELLOW}👉 Add these patterns to your .gitignore immediately!${NC}"
+        FAILED=1
+    else
+        echo -e "${GREEN}✅ Safe! All existing local secret files (.env, .tfvars, .tfstate, .kdbx) are properly ignored.${NC}"
+    fi
+else
+    echo -e "${GREEN}✅ Safe! No local .env, .tfvars, or backup files found in the directory tree.${NC}"
+fi
+
+# Step 3: High-Entropy Plaintext Scan
+echo -e "\n${BLUE}🔎 Step 3: Scanning files for high-entropy strings and plaintext patterns...${NC}"
+# Searches for plain-text password/token assignments committed in your code directories
+# Store the regex pattern cleanly in a double-quoted variable to satisfy ShellCheck SC1003
+PATTERN="(password|token|pat|client_secret|client-secret|clientid|client-id|access_key|access-key|api-token|api_token)[[:space:]]*=[[:space:]]*[\"'][a-zA-Z0-9_-]{8,128}[\"']"
+
+SUSPICIOUS_LINES=$(git grep -E -n -i "$PATTERN" -- '*.tf' '*.sh' '*.yaml' '*.yml' '*.env' '*.json' 2>/dev/null || true)
+
+if [ -n "$SUSPICIOUS_LINES" ]; then
+    echo -e "${YELLOW}⚠️  POTENTIAL PLAIN-TEXT SECRET LEAKS DETECTED:${NC}"
+    echo -e "${YELLOW}The following tracked lines seem to assign sensitive strings in plain text:${NC}"
+    while IFS= read -r line; do
+        [ -z "$line" ] && continue
+        echo -e "  - $line"
+    done <<< "$SUSPICIOUS_LINES"
+    echo -e "${YELLOW}👉 Ensure these values are abstracted into variables/Azure Key Vault references!${NC}"
+else
+    echo -e "${GREEN}✅ Clean! No obvious plain-text password/token assignments found in tracked files.${NC}"
+fi
+
+# Step 4: Line Normalization Check
+echo -e "\n${BLUE}🔎 Step 4: Running validation checklist...${NC}"
+if [ -f ".gitattributes" ]; then
+    echo -e "${GREEN}✅ .gitattributes exists (line normalization is active).${NC}"
+else
+    echo -e "${YELLOW}⚠️  Missing .gitattributes! Highly recommended for cross-platform WSL setups to prevent CRLF errors.${NC}"
+fi
+
+if [ "$FAILED" -eq 1 ]; then
+    echo -e "\n${RED}🛑 AUDIT FAILED! Please resolve the security gaps above before pushing code to your public repository.${NC}"
+    exit 1
+else
+    echo -e "\n${GREEN}🎉 SUCCESS! Your repository is 100% clean and ready for public push!${NC}"
+    exit 0
+fi
+```
+
+---
+
+### 📄 File: scripts/workstation/audit-shellcheck.sh
+```bash
+#!/usr/bin/env bash
+# scripts/workstation/audit-shellcheck.sh
+# Deterministically audits only the staged bytes of shell scripts in the Git index.
+# Fulfills ADR_011 (Directory Anchoring) and ADR_013 (Secrets Sovereignty).
+
+set -euo pipefail
+
+# Force C.UTF-8 locale fallback to suppress host-side setlocale warnings
+export LANG=C.UTF-8
+export LC_ALL=C.UTF-8
+
+# ADR 011 Rule 5: Directory Anchoring (Script is 2 levels deep)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+
+if ! command -v shellcheck &> /dev/null; then
+    echo "⚠️  [ShellCheck Audit] 'shellcheck' is not installed!"
+    echo "   To enable syntax checks, run: sudo apt install shellcheck"
+    exit 0
+fi
+
+echo "🔍 Auditing staged Shell scripts..."
+
+failed=0
+# diff-filter=ACMR gets ONLY staged additions, modifications, or renames
+while IFS= read -r file; do
+    [ -z "$file" ] && continue
+    
+    # Check the physical file on disk ONLY if it is part of the staged commit
+    if [ -f "${REPO_ROOT}/${file}" ]; then
+        first_line=$(head -n 1 "${REPO_ROOT}/${file}" || true)
+        if [[ "$file" =~ \.sh$ ]] || [[ "$first_line" =~ ^#\!.*sh ]]; then
+            echo "   -> Scanning working tree copy of staged file: $file"
+            if ! shellcheck "${REPO_ROOT}/${file}"; then
+                echo "❌ ShellCheck failed on: $file"
+                failed=1
+            fi
+        fi
+    fi
+done < <(git -C "$REPO_ROOT" diff --cached --name-only --diff-filter=ACMR 2>/dev/null || true)
+
+
+if [ "$failed" -ne 0 ]; then
+    echo "❌ [Audit Gate] ShellCheck validation failed! Fix warnings before committing."
+    exit 1
+fi
+
+echo "✅ ShellCheck audit completed successfully!"
+exit 0
+```
+
+---
+
+### 📄 File: scripts/workstation/bundle-codebase.sh
+```bash
+#!/usr/bin/env bash
+# scripts/workstation/bundle-codebase.sh
+# Generates a single high-density markdown snapshot of tracked files
+# to auto-sync with your Google Drive / Gemini Notebook pipeline.
+
+set -euo pipefail
+shopt -s globstar nullglob
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+OUTPUT_FILE="${OUTPUT_FILE:-${REPO_ROOT}/docs/planning/active-codebase.md}"
+
+prepare_output() {
+    mkdir -p "$(dirname "$OUTPUT_FILE")"
+}
+
+write_header() {
+    prepare_output
+    printf '# 📂 Active Codebase State\n\n' > "$OUTPUT_FILE"
+    printf 'Last compiled: %s\n\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" >> "$OUTPUT_FILE"
+    printf 'This file provides high-density context of tracked configurations for AI alignment.\n' >> "$OUTPUT_FILE"
+}
+
+section_title() {
+    printf '\n---\n\n%s\n' "$1" >> "$OUTPUT_FILE"
+}
+
+append_file() {
+    local path="$1"
+    local lang="$2"
+
+    section_title "### 📄 File: ${path}"
+    {
+      printf '```%s\n' "$lang" >> "$OUTPUT_FILE"
+      cat "$REPO_ROOT/$path" >> "$OUTPUT_FILE"
+      printf '```\n'
+    }  >> "$OUTPUT_FILE"
+}
+
+append_files() {
+    local title="$1"
+    local lang="$2"
+    shift 2
+
+    local files=()
+    local path
+    for glob in "$@"; do
+        for path in "$REPO_ROOT"/$glob; do
+            [ -f "$path" ] || continue
+            files+=("${path#"$REPO_ROOT"/}")
+        done
+    done
+
+    local tracked=()
+    declare -A seen=()
+    for path in "${files[@]}"; do
+        [ -n "${seen[$path]:-}" ] && continue
+        if git -C "$REPO_ROOT" ls-files --error-unmatch -- "$path" >/dev/null 2>&1; then
+            seen[$path]=1
+            tracked+=("$path")
+        fi
+    done
+
+    if [ "${#tracked[@]}" -eq 0 ]; then
+        return
+    fi
+
+    mapfile -t sorted < <(printf '%s\n' "${tracked[@]}" | sort)
+    section_title "$title"
+    for path in "${sorted[@]}"; do
+        append_file "$path" "$lang"
+    done
+}
+
+main() {
+    write_header
+
+    append_files '## 🛠️ Core Automation Files' 'text' Makefile local-profile.env azure-profile.env
+    append_files '## 🐚 Active Shell Scripts' 'bash' 'scripts/**/*.sh' 'scripts/**/*.py'
+    append_files '## ☸️ Declarative Kubernetes Manifests' 'yaml' 'manifests/**/*.yaml' 'manifests/**/*.yml' 'manifests/**/*.txt'
+    append_files '## ☸️ Declarative Infrastructure Files' 'yaml' 'infrastructure/**/*.yaml' 'infrastructure/**/*.yml' 'infrastructure/**/*.tf'
+    append_files '## 📁 Core Configuration Files' 'yaml' 'core/**/*.service' 'core/**/*.yaml' 'core/**/*.yml' 'core/**/*.template'
+    append_files '## 📁 Inventory Files' 'yaml' 'inventory/**/*.env' 'inventory/**/*.ini'
+
+    printf '\nCodebase successfully compiled to %s!\n' "$OUTPUT_FILE"
+}
+
+main
+```
 
 ---
 
@@ -701,8 +968,7 @@ sed -e 's/[[:space:]]*#.*//' -e 's/[[:space:]]*$//' "$INPUT_FILE" > "$OUTPUT_FIL
 #!/usr/bin/env bash
 # Define script and repository root directories dynamically
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck disable=SC2034
-REPO_ROOT="$(dirname "$SCRIPT_DIR")"
+
 
 # 1. Fetch the Kubeconfig from KC01 and point it to the static IP
 mkdir -p ~/.kube
