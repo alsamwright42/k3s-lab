@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Define script and repository root directories dynamically
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE}")" && pwd)"
-REPO_ROOT="$(dirname "$SCRIPT_DIR")"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 
 # 1. Fetch the Kubeconfig from KC01 and point it to the static IP
 mkdir -p ~/.kube

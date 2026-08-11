@@ -4,7 +4,7 @@ set -euo pipefail
 echo "=== Validating and Parsing HA Node Inventory ==="
 declare -A HA_NODES
 
-# Rebuild the associative array from the flat string in global.env
+# Rebuild the associative array from the flat string in the node config environment variable
 for record in $HA_NODES_CONFIG; do
     # Extract the three pieces of data separated by colons
     IFS=':' read -r node state priority <<< "$record"
