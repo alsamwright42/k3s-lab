@@ -36,8 +36,6 @@ FAILED=0
 
 # Step 1: Active Tracking Audit
 echo -e "\n${BLUE}🔎 Step 1: Checking for actively tracked sensitive files...${NC}"
-# Checks if Git is tracking any files that match sensitive structural patterns
-# Fixes folder path collisions (like external-secrets) by matching specific extensions/filenames
 TRACKED_SECRETS=$(git ls-files | grep -E '(\.tfvars$|\.env$|\.tfstate$|id_rsa|id_ed25519|\.pem$|\.key$|vault-keys\.json|\.kdbx$)' || true)
 
 if [ -n "$TRACKED_SECRETS" ]; then
@@ -56,14 +54,12 @@ fi
 
 # Step 2: Gitignore Enforcement Audit
 echo -e "\n${BLUE}🔎 Step 2: Verifying .gitignore coverage for sensitive files...${NC}"
-# Scans for local credential files that might exist on disk but are not blocked by gitignore rules
 EXISTING_SECRETS=$(find . -type f \( -name "*.env" -o -name "*.tfvars" -o -name "*.tfstate" -o -name "vault-keys.json" -o -name "*.kdbx" \) -not -path '*/.*' -not -path '*/node_modules/*' || true)
 
 if [ -n "$EXISTING_SECRETS" ]; then
     UNIGNORED_SECRETS=""
     while IFS= read -r file; do
         [ -z "$file" ] && continue
-        # git check-ignore returns 0 if ignored, 1 if not ignored
         if ! git check-ignore -q "$file"; then
             UNIGNORED_SECRETS="${UNIGNORED_SECRETS}\n  - $file"
         fi
@@ -83,8 +79,6 @@ fi
 
 # Step 3: High-Entropy Plaintext Scan
 echo -e "\n${BLUE}🔎 Step 3: Scanning files for high-entropy strings and plaintext patterns...${NC}"
-# Searches for plain-text password/token assignments committed in your code directories
-# Store the regex pattern cleanly in a double-quoted variable to satisfy ShellCheck SC1003
 PATTERN="(password|token|pat|client_secret|client-secret|clientid|client-id|access_key|access-key|api-token|api_token)[[:space:]]*=[[:space:]]*[\"'][a-zA-Z0-9_-]{8,128}[\"']"
 
 SUSPICIOUS_LINES=$(git grep -E -n -i "$PATTERN" -- '*.tf' '*.sh' '*.yaml' '*.yml' '*.env' '*.json' 2>/dev/null || true)

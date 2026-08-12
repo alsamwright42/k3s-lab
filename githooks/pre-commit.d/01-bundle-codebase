@@ -1,5 +1,11 @@
 #!/usr/bin/env bash
+
 set -euo pipefail
+
+# Force safe system fallback locales
+export LANG=C.UTF-8
+export LC_ALL=C.UTF-8
+
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 BUNDLE_SCRIPT="${REPO_ROOT}/scripts/workstation/bundle-codebase.sh"
 SNAPSHOT_FILE="${REPO_ROOT}/docs/planning/active-codebase.md"

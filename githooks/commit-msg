@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# githooks/commit-msg
-# Modular orchestrator for Git commit message verification.
 set -euo pipefail
+export LANG=C.UTF-8
+export LC_ALL=C.UTF-8
 
 COMMIT_MSG_FILE="$1"
 HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

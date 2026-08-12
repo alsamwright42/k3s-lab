@@ -2,50 +2,74 @@
 # Fulfills Technical Debt #4: Centralize Global Configuration
 
 # =============================================================================
-# ⚙️ CONFIGURATION VARIABLES
+# ⚙️ CONFIGURATION & EXTENSIONS
 # =============================================================================
 
-## [Optional] Target environment profile. Maps to any 'inventory/<name>.env' file. Default: local
-PROFILE ?= local
-## [Optional] Bypass safety checks and run-once safety locks. Choices: [true, false]. Default: false
-FORCE ?= false
-## [Optional] CI/CD Mode. Bypasses local file-sourcing. Choices: [true, false]. Default: false
-CI ?= false 		  
+# Define universal binary requirements. Individual repositories can append 
+# their own specific tools (e.g., REQUIRED_TOOLS += terraform or REQUIRED_TOOLS += mvnw).
+REQUIRED_TOOLS ?= shellcheck git 
+
+REQUIRED_TOOLS += terraform kubectl kustomize envsubst ssh
+
+PROFILE ?= local		## [Optional] Target environment profile. Maps to any 'inventory/<name>.env' file. Default: local
+FORCE ?= false			## [Optional] Bypass safety checks and run-once safety locks. Choices: [true, false]. Default: false
+CI ?= false 			## [Optional] CI/CD Mode. Bypasses local file-sourcing. Choices: [true, false]. Default: false
+USE_PROFILES ?= true	## [Optional] Enable environment variable profile loading. Choices: [true, false]. Default: false
+
+# =============================================================================
+# 🧼 WHITESPACE SANITIZER (Sanitizes trailing spaces from comments in advance)
+# =============================================================================
+# We use eager evaluation (:=) to strip trailing whitespace immediately on startup
+PROFILE      := $(strip $(PROFILE))
+FORCE        := $(strip $(FORCE))
+CI           := $(strip $(CI))
+USE_PROFILES := $(strip $(USE_PROFILES))
 
 ENV_FILE := inventory/$(PROFILE).env
 
 # Define the temporary build artifact
 CLEAN_ENV := /tmp/clean.env
 
-# Environment loader
+# =============================================================================
+# 🔐 ENVIRONMENT LOADER
+# =============================================================================
 ifeq ($(CI),true)
   # 🟢 CI/CD Mode: Bypass local file-sourcing entirely.
-  # Inherit pristine variables/secrets injected directly into the runner's memory.
   $(info === CI/CD Mode: Inheriting environment variables from runner ===)
-else ifeq ($(wildcard ./scripts/workstation/sanitize-env.sh),)
-  # 🟡 Sandbox Mode: Fallback if the script is missing (e.g., this agent session).
-	$(info === Sandbox Mode: Using default environment variables ===)
-else
-  # 💻 Local Workstation Mode: Clean, include, and export the selected profile file.
-  $(info === Local Workstation Mode: Sanitizing and loading $(ENV_FILE) ===)
-  $(info $(shell ./scripts/workstation/sanitize-env.sh $(ENV_FILE) $(CLEAN_ENV)))
-  include $(CLEAN_ENV)
-  export
+else ifeq ($(USE_PROFILES),true)
+  # 💻 Profile Loading Enabled: Verify file existence before running sanitizer
+  ifeq ($(wildcard $(ENV_FILE)),)
+    $(warning ⚠️  WARNING: Profile configuration file not found at '$(ENV_FILE)'!)
+    $(warning    -> To fix this, create the file or copy from a template.)
+  else ifeq ($(wildcard ./scripts/workstation/sanitize-env.sh),)
+    # 🟡 Sandbox/Missing Script Mode: Fallback gracefully
+    $(info === Sandbox Mode: Profile file found, but sanitize-env.sh is missing. Skipping load ===)
+  else
+    # 💻 Local Workstation Mode: Clean, include, and export the selected profile file.
+    $(info === Local Workstation Mode: Sanitizing and loading $(ENV_FILE) ===)
+    $(info $(shell ./scripts/workstation/sanitize-env.sh $(ENV_FILE) $(CLEAN_ENV)))
+    -include $(CLEAN_ENV)
+    export
+  endif
 endif
+
+# Sentinel file indicating onboarding compliance
+SETUP_SENTINEL := .setup_done
+
+.DEFAULT_GOAL := help
 
 # Centralized staging files in a secure, unprivileged directory
 STAGE := /tmp/kustomize-argocd.yaml
 STAGE_CORE := /tmp/kustomize-argocd-core.yaml
 DAY0_LOCK := /etc/rancher/k3s/.day0_lock
 
-.DEFAULT_GOAL := help
-
-.PHONY: day0-bare-metal platform-core gitops-apps \
+.PHONY: setup setup-githooks check-workstation-tools guard-setup test help \
+        day0-bare-metal platform-core gitops-apps \
         check-day0-lock write-day0-lock \ 
-				provision-nodes deploy-ha-dns sync-azure-secrets apply-globals \
-        kustomize-argocd bootstrap-argocd test \
-				deploy-portainer deploy-vaultwarden deploy-vw-backup \
-				bundle
+		provision-nodes deploy-ha-dns sync-azure-secrets apply-globals \
+        kustomize-argocd bootstrap-argocd \
+		deploy-portainer deploy-vaultwarden deploy-vw-backup \
+		bundle
 
 help: ## Display this help message with target descriptions
 	@echo "=========================================================================="
@@ -60,11 +84,58 @@ help: ## Display this help message with target descriptions
 	@grep -h -E '^[a-zA-Z0-9_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-22s\033[0m %s\n", $$1, $$2}'
 
 # ==============================================================================
+# 🛠️ WORKSPACE ONBOARDING TARGETS
+# ==============================================================================
+
+setup: check-workstation-tools setup-githooks ## Bootstrap local WSL workspace and prepare development plane
+  @touch $(SETUP_SENTINEL)
+	@echo "=========================================================================="
+	@echo "🎉 SUCCESS: Workspace is configured!"
+	@echo "=========================================================================="
+
+setup-githooks: ## Activate local Git hooks and map core.hooksPath
+	@echo "⚓ Activating local workstation Git hooks..."
+	@chmod +x githooks/pre-commit githooks/commit-msg 2>/dev/null || true
+	@chmod +x githooks/pre-commit.d/* githooks/commit-msg.d/* 2>/dev/null || true
+	@chmod +x scripts/workstation/*.sh 2>/dev/null || true
+	@git config core.hooksPath githooks
+	@echo "✅ Git hooks successfully mapped to 'githooks/' and marked executable!"
+
+check-workstation-tools: ## Validate if required binaries are present on disk
+	@echo "🔎 Auditing workstation binary toolchain..."
+	@failed=0; \
+	for tool in $(REQUIRED_TOOLS); do \
+		if ! command -v $$tool > /dev/null 2>&1; then \
+			echo "⚠️  WARNING: '$$tool' is missing on this workstation."; \
+		else \
+			echo "✅ $$tool is present."; \
+		fi; \
+	done
+
+# Quietly guard critical targets. Supports FORCE=true to allow pipeline/CI bypasses.
+# This must be the first dependency in any target chain that requires a fully initialized workstation.
+guard-setup:
+ifeq ($(FORCE),true)
+	@echo "⚠️ FORCE=true specified. Bypassing workspace setup validation checks!"
+else ifeq ($(CI),true)
+	@echo "🟢 CI/CD environment detected. Bypassing workstation setup check."
+else ifeq ($(wildcard $(SETUP_SENTINEL)),)
+	@echo "=========================================================================="
+	@echo "🛑 REJECTED: Your workspace has not been initialized yet!"
+	@echo "👉 To unblock this target and configure your workstation linter gates,"
+	@echo "   you must run the onboarding target first:"
+	@echo "   "
+	@echo "   make setup"
+	@echo "=========================================================================="
+	@exit 1
+endif
+
+# ==============================================================================
 # 🚀 MACRO ENTRY POINTS (The platform lifecycle)
 # ==============================================================================
 
 # DAY 0: Bare Metal & Host OS Layer (Locked to run-once; override with FORCE=true)
-day0-bare-metal: check-day0-lock provision-nodes deploy-ha-dns write-day0-lock ## [Day 0] Provision bare-metal nodes and deploy HA DNS (Keepalived + Pi-hole)
+day0-bare-metal: guard-setup check-day0-lock provision-nodes deploy-ha-dns write-day0-lock ## [Day 0] Provision bare-metal nodes and deploy HA DNS (Keepalived + Pi-hole)
 	@echo "✅ [Day 0 Complete] Physical hosts provisioned and routing is stable."
 
 # DAY 1: Platform Core & Control Plane (Gated by TDD Workstation Unit Tests)
@@ -108,13 +179,12 @@ write-day0-lock:
 # ⚙️ DETAILED OPERATIONAL TARGETS
 # ==============================================================================
 
-# Test suite: Dynamically discover and execute all unit tests under tests/
-test: ## Run the complete workstation test suite
+test: guard-setup ## Run the complete workstation test suite
 	@echo "=== Running Workstation Test Suite ==="
 	python3 -m unittest discover -v -s tests -p "test_*.py"
 	@echo "✅ All unit tests passed successfully!"
 
-kustomize-argocd: ## Compile Kustomize AST and substitute environment variables
+kustomize-argocd: guard-setup ## Compile Kustomize AST and substitute environment variables
 	@echo "=== Compiling and Verifying ArgoCD Kustomize build ==="
 	kubectl kustomize manifests/base/argocd/ | envsubst > $(STAGE)
 	@echo "✅ Kustomize validation succeeded! Rendered manifest cached at $(STAGE)"
@@ -136,31 +206,31 @@ bootstrap-argocd: kustomize-argocd ## Deploy Argo CD controller in two-phase syn
 	@rm -f $(STAGE_CORE)
 	@echo "🚀 Argo CD successfully bootstrapped!" 
 
-provision-nodes: ## Bootstrap K3s server and agent nodes over SSH
+provision-nodes: guard-setup ## Bootstrap K3s server and agent nodes over SSH
 	@echo "=== Bootstrapping K3s Nodes ==="
 	./scripts/bare-metal/bootstrap.sh
 
-deploy-ha-dns: ## Deploy Keepalived and Pi-hole for high-availability DNS routing
+deploy-ha-dns: guard-setup ## Deploy Keepalived and Pi-hole for high-availability DNS routing
 	@echo "=== Deploying High-Availability DNS ==="
 	./scripts/bare-metal/deploy-ha-dns.sh
 
-deploy-vaultwarden: ## Deploy standalone Vaultwarden Docker container
+deploy-vaultwarden: guard-setup ## Deploy standalone Vaultwarden Docker container
 	@echo "=== Deploying Standalone Vaultwarden ==="
 	./scripts/bare-metal/deploy-vaultwarden.sh
 
-sync-azure-secrets: ## Sync Azure Key Vault credentials to K3s cluster
+sync-azure-secrets: guard-setup ## Sync Azure Key Vault credentials to K3s cluster
 	@echo "=== Syncing Azure Key Vault Credentials to K3s ==="
 	./scripts/azure/sync-azure-secrets.sh
 
-apply-globals: ## Inject homelab global environment ConfigMaps
+apply-globals: guard-setup ## Inject homelab global environment ConfigMaps
 	@echo "=== Injecting global configuration from environment variables ==="
 	envsubst < manifests/base/globals/homelab-globals.yaml | kubectl apply -f -
 
-deploy-vw-backup: ## Deploy standalone Vaultwarden backup CronJob manifest
+deploy-vw-backup: guard-setup ## Deploy standalone Vaultwarden backup CronJob manifest
 	@echo "=== Deploying Vaultwarden Backup CronJob ==="
 	envsubst '$$INGRESS_IP $$DOMAIN $$VW_URL' < manifests/apps/vaultwarden/vaultwarden-backup-cronjob.yaml | kubectl apply -f -
 
-bundle: ## Bundle the active codebase into a single markdown for AI agent consumption
+bundle: guard-setup ## Bundle the active codebase into a single markdown for AI agent consumption
 	@echo "=== Bundling codebase into a single markdown file ==="
 	./scripts/workstation/bundle-codebase.sh
 	
