@@ -1,6 +1,6 @@
 ---
 name: "📦 Story / Feature Task"
-description: Standard development task, configuration change, or deployment
+about: Standard development task, configuration change, or deployment
 title: "Story: [Short Descriptive Title]"
 labels: ["story"]
 assignees: ""
