@@ -1,6 +1,6 @@
 # 📂 Active Codebase State
 
-Last compiled: 2026-08-13T17:46:29Z
+Last compiled: 2026-08-13T18:03:21Z
 
 This file provides high-density context of tracked configurations for AI alignment.
 
@@ -795,7 +795,7 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 export LANG=C.UTF-8
 export LC_ALL=C.UTF-8
 
-if ! command -v shellcheck &> /dev/null; then
+if ! command -v shellcheck > /dev/null 2>&1; then
     echo "⚠️  [ShellCheck Audit] 'shellcheck' is not installed!"
     echo "   To enable syntax checks, run: sudo apt install shellcheck"
     exit 0

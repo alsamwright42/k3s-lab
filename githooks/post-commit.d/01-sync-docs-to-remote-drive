@@ -8,5 +8,10 @@ export LC_ALL=C.UTF-8
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 cd "$REPO_ROOT"
-# "remote" endpoint is configured in the rclone config file, and points to the remote drive where the docs are stored.
-rclone sync docs remote:"HomeLab Operations/docs" >/dev/null 2>&1 &
+
+echo "🔄 Synchronizing local documentation baseline to remote drive..."
+# Running synchronously guarantees that rclone reads a frozen snapshot of docs/ 
+# before any subsequent developer actions can alter the working directory.
+rclone sync docs remote:"HomeLab Operations/docs" > /dev/null 2>&1
+echo "✅ Documentation successfully synchronized."
+
