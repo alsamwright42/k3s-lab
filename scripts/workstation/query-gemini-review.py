@@ -20,6 +20,16 @@ def parse_args():
         default=os.environ.get("GEMINI_OUTPUT_PATH", "review_output.json"),
         help="Path to save the generated JSON review findings (default: 'review_output.json' or GEMINI_OUTPUT_PATH env var)"
     )
+    parser.add_argument(
+        "--model",
+        default=os.environ.get("GEMINI_MODEL", "gemini-3.5-flash"),
+        help="Gemini model version (default: 'gemini-3.5-flash' or GEMINI_MODEL env var)"
+    )
+    parser.add_argument(
+        "--api-version",
+        default=os.environ.get("GEMINI_API_VERSION", "v1beta"),
+        help="Gemini api version used in gemini url (default: 'v1beta' or GEMINI_API_VERSION env var)"
+    )    
     return parser.parse_args()
 
 def main():
@@ -32,6 +42,8 @@ def main():
 
     diff_path = args.diff_path
     output_path = args.output_path
+    api_version = args.api_version
+    model = args.model
 
     # Initialize default empty comments file to ensure downstream steps don't crash
     default_output = {"comments": []}
@@ -74,7 +86,7 @@ def main():
         f"Here is the diff to analyze:\n\n{diff_content}"
     )
 
-    url = f"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key={api_key}"
+    url = f"https://generativelanguage.googleapis.com/{api_version}/models/{model}:generateContent?key={api_key}"
     headers = {"Content-Type": "application/json"}
     payload = {
         "contents": [{

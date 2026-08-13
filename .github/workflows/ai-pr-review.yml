@@ -42,6 +42,8 @@ jobs:
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
       GEMINI_DIFF_PATH: "pr_changes.diff"
       GEMINI_OUTPUT_PATH: "review_output.json"
+      GEMINI_MODEL: "gemini-3.6-flash"
+      GEMINI_API_VERSION: "v1beta"
 
     steps:
       - name: "Checkout Code"
@@ -62,8 +64,9 @@ jobs:
           # Executes the companion Python script, feeding it the PR diff 
           python3 scripts/workstation/query-gemini-review.py \
             --diff-path "$GEMINI_DIFF_PATH" \
-            --output-path "$GEMINI_OUTPUT_PATH"
-
+            --output-path "$GEMINI_OUTPUT_PATH" \
+            --model "$GEMINI_MODEL" \
+            --api-version "$GEMINI_API_VERSION"
       - name: "Post Annotations to Pull Request"
         uses: actions/github-script@v7
         with:
