@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# ADR 011 Rule 5: Directory Anchoring
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 echo "=== Deploying Standalone Vaultwarden on ${VW_NODE} ==="
 
 # ADR 011 Rule 1: No Error Swallowing (We allow 'true' only to permit first-time clean deployment)

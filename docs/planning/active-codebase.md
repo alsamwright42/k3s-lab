@@ -1,6 +1,6 @@
 # 📂 Active Codebase State
 
-Last compiled: 2026-08-13T16:55:24Z
+Last compiled: 2026-08-13T17:10:21Z
 
 This file provides high-density context of tracked configurations for AI alignment.
 
@@ -115,14 +115,14 @@ setup-githooks: ## Activate local Git hooks and map core.hooksPath
 	@git config core.hooksPath githooks
 	@echo "✅ Git hooks successfully mapped to 'githooks/' and marked executable!"
 
-check-workstation-tools: ## Validate if required binaries are present on disk
+check-workstation-tools: ## Validate if required binaries are present on disk without hard fail
 	@echo "🔎 Auditing workstation binary toolchain..."
 	@failed=0; \
 	for tool in $(REQUIRED_TOOLS); do \
-		if ! command -v $$tool > /dev/null 2>&1; then \
-			echo "⚠️  WARNING: '$$tool' is missing on this workstation."; \
-		else \
+		if command -v $$tool > /dev/null 2>&1; then \
 			echo "✅ $$tool is present."; \
+		else \
+			echo "⚠️  WARNING: '$$tool' is missing on this workstation. Some targets may fail."; \			
 		fi; \
 	done
 
@@ -357,14 +357,6 @@ wait_for_condition() {
     exit 1
 }
 
-# Self-Healing Safety Net: Automatically strip Windows CRLF line endings
-# Excludes this running script to prevent the self-modifying truncation trap.
-for script in "${SCRIPT_DIR}"/*.sh; do
-    if [ -f "$script" ] && [ "$script" != "${BASH_SOURCE[0]}" ]; then
-        sed -i -e 's/\r$//' "$script" 2>/dev/null || true
-    fi
-done
-
 echo "=== Validating and Parsing Node Inventory ==="
 declare -a CLUSTER_NODES
 
@@ -594,8 +586,6 @@ echo "Pi-hole Web UIs accessible at: http://192.168.1.50:8053 and http://192.168
 #!/usr/bin/env bash
 set -euo pipefail
 
-# ADR 011 Rule 5: Directory Anchoring
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 echo "=== Deploying Standalone Vaultwarden on ${VW_NODE} ==="
 
 # ADR 011 Rule 1: No Error Swallowing (We allow 'true' only to permit first-time clean deployment)

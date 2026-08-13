@@ -101,14 +101,14 @@ setup-githooks: ## Activate local Git hooks and map core.hooksPath
 	@git config core.hooksPath githooks
 	@echo "✅ Git hooks successfully mapped to 'githooks/' and marked executable!"
 
-check-workstation-tools: ## Validate if required binaries are present on disk
+check-workstation-tools: ## Validate if required binaries are present on disk without hard fail
 	@echo "🔎 Auditing workstation binary toolchain..."
 	@failed=0; \
 	for tool in $(REQUIRED_TOOLS); do \
-		if ! command -v $$tool > /dev/null 2>&1; then \
-			echo "⚠️  WARNING: '$$tool' is missing on this workstation."; \
-		else \
+		if command -v $$tool > /dev/null 2>&1; then \
 			echo "✅ $$tool is present."; \
+		else \
+			echo "⚠️  WARNING: '$$tool' is missing on this workstation. Some targets may fail."; \			
 		fi; \
 	done
 

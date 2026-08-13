@@ -29,14 +29,6 @@ wait_for_condition() {
     exit 1
 }
 
-# Self-Healing Safety Net: Automatically strip Windows CRLF line endings
-# Excludes this running script to prevent the self-modifying truncation trap.
-for script in "${SCRIPT_DIR}"/*.sh; do
-    if [ -f "$script" ] && [ "$script" != "${BASH_SOURCE[0]}" ]; then
-        sed -i -e 's/\r$//' "$script" 2>/dev/null || true
-    fi
-done
-
 echo "=== Validating and Parsing Node Inventory ==="
 declare -a CLUSTER_NODES
 
