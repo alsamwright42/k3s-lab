@@ -37,7 +37,6 @@ jobs:
     if: needs.check-credentials.outputs.enabled == 'true'
     runs-on: ubuntu-latest
     
-        # 🔐 Explicitly grant permissions to allow GITHUB_TOKEN to write pull request reviews
     permissions:
       contents: read
       pull-requests: write
@@ -64,7 +63,6 @@ jobs:
           echo "diff_path=$GEMINI_DIFF_PATH" >> "$GITHUB_OUTPUT"
 
       - name: "Consult Gemini for Code Quality & Security Review"
-
         run: |
           # Executes the companion Python script, feeding it the PR diff 
           python3 scripts/workstation/query-gemini-review.py \
@@ -72,6 +70,7 @@ jobs:
             --output-path "$GEMINI_OUTPUT_PATH" \
             --model "$GEMINI_MODEL" \
             --api-version "$GEMINI_API_VERSION"
+
       - name: "Post Annotations to Pull Request"
         uses: actions/github-script@v7
         with:
@@ -115,12 +114,38 @@ jobs:
               return;
             }
 
-            console.log(`Publishing ${comments.length} line-by-line annotations...`);
-            await github.rest.pulls.createReview({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              pull_number: context.payload.pull_request.number,
-              body: "🤖 **Gemini AI Code Quality & Security Audit**\n\nI have evaluated your changes. Please review the line-by-line suggestions below.",
-              event: 'COMMENT',
-              comments: comments
-            });
+            try {
+              console.log(`Publishing ${comments.length} line-by-line annotations from '${path}'...`);
+              await github.rest.pulls.createReview({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: context.payload.pull_request.number,
+                body: "🤖 **Gemini AI Code Quality & Security Audit**\n\nI have evaluated your changes. Please review the line-by-line suggestions below to ensure compliance with our cluster standards.",
+                event: 'COMMENT',
+                comments: comments
+              });
+              console.log("✅ Successfully posted line-by-line annotations!");
+            } catch (error) {
+              if (error.status === 422) {
+                console.log("⚠️ GitHub API rejected line-by-line review comments (likely because one or more line numbers did not exist in the PR diff).");
+                console.log("🔄 Self-Healing: Falling back to a unified top-level PR summary comment to preserve findings...");
+                
+                let summaryBody = "🤖 **Gemini AI Code Quality & Security Audit (Unified Report)**\n\nSome suggestions could not be mapped directly to lines in the active pull request diff. Here is the full list of findings:\n\n";
+                
+                for (const item of (reviewData.comments || [])) {
+                  summaryBody += `* 📁 **File**: \`${item.file}\` | 🔢 **Line**: \`${item.line}\`\n  ${item.message}\n\n`;
+                }
+                
+                await github.rest.pulls.createReview({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  pull_number: context.payload.pull_request.number,
+                  body: summaryBody,
+                  event: 'COMMENT'
+                });
+                console.log("✅ Successfully posted the unified fallback review summary!");
+              } else {
+                // If it is an auth or api error other than line mismatch (422), fail loud
+                throw error;
+              }
+            }
