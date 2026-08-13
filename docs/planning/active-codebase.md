@@ -1,6 +1,6 @@
 # 📂 Active Codebase State
 
-Last compiled: 2026-08-13T02:53:37Z
+Last compiled: 2026-08-13T03:21:37Z
 
 This file provides high-density context of tracked configurations for AI alignment.
 
@@ -1078,7 +1078,7 @@ def main():
         f"Here is the diff to analyze:\n\n{diff_content}"
     )
 
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
+    url = f"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key={api_key}"
     headers = {"Content-Type": "application/json"}
     payload = {
         "contents": [{
