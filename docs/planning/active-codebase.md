@@ -1,6 +1,6 @@
 # 📂 Active Codebase State
 
-Last compiled: 2026-08-13T21:59:00Z
+Last compiled: 2026-08-13T22:28:36Z
 
 This file provides high-density context of tracked configurations for AI alignment.
 
@@ -1057,17 +1057,22 @@ def parse_args():
 def parse_diff_to_changes_list(diff_content):
     """
     Parses a unified diff and returns a formatted list of files and absolute line numbers
-    indicating where lines of code were added or modified (+ lines).
+    indicating where lines of code were added or modified (+ lines), along with a set of valid (file, line) pairs.
     This serves as a high-density index for the LLM to map comments precisely.
     """
     hunk_re = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@")
     current_file = None
     lines_by_file = {}
+    changed_lines = set()
     
     current_line = 0
     for line in diff_content.splitlines():
         if line.startswith("+++ b/"):
             current_file = line[6:].strip()
+            # 🛡️ Skip review for documentation, markdown files, and any auto-generated docs
+            if current_file.endswith(".md") or current_file.startswith("docs/"):
+                current_file = None
+                continue
             lines_by_file[current_file] = []
         elif line.startswith("@@"):
             match = hunk_re.match(line)
@@ -1076,6 +1081,7 @@ def parse_diff_to_changes_list(diff_content):
         elif current_file and current_line > 0:
             if line.startswith("+") and not line.startswith("+++"):
                 lines_by_file[current_file].append((current_line, line[1:]))
+                changed_lines.add((current_file, current_line))
                 current_line += 1
             elif line.startswith("-") and not line.startswith("---"):
                 # Deleted lines do not advance line numbers in the new file
@@ -1093,12 +1099,13 @@ def parse_diff_to_changes_list(diff_content):
                 formatted_list.append(f"Line {line_num}: {content}")
             formatted_list.append("") # Spacer
             
-    return "\n".join(formatted_list)
+    return "\n".join(formatted_list), changed_lines
 
-def filter_suppressed_comments(review_data, repo_root="."):
+def filter_suppressed_comments(review_data, changed_lines, repo_root="."):
     """
-    Filters out any comments pointing to lines in files that contain '# ai-ignore'
-    or standard comment line equivalent 'ai-ignore' overrides.
+    Filters out:
+    1. Comments that are not on actively changed lines in the PR diff (prevents GitHub 422 errors).
+    2. Comments pointing to lines in files that contain '# ai-ignore' or standard equivalent overrides.
     """
     comments = review_data.get("comments", [])
     filtered_comments = []
@@ -1108,7 +1115,17 @@ def filter_suppressed_comments(review_data, repo_root="."):
         line_num = comment.get("line")
         
         if not filename or not line_num:
-            filtered_comments.append(comment)
+            continue
+            
+        try:
+            line_num_int = int(line_num)
+        except (ValueError, TypeError):
+            continue
+            
+        # 1. Enforce strict PR diff alignment. If a comment is not on an actively changed line,
+        # discard it to guarantee GitHub REST API won't reject the review payload with a 422 error.
+        if (filename, line_num_int) not in changed_lines:
+            print(f"🧹 Discarding AI comment on {filename}:{line_num_int} - line is not part of the active PR additions/modifications.")
             continue
             
         file_path = os.path.join(repo_root, filename)
@@ -1120,11 +1137,11 @@ def filter_suppressed_comments(review_data, repo_root="."):
             with open(file_path, "r", encoding="utf-8") as f:
                 lines = f.readlines()
                 
-            idx = int(line_num) - 1
+            idx = line_num_int - 1
             if 0 <= idx < len(lines):
                 target_line = lines[idx]
                 if "ai-ignore" in target_line:
-                    print(f"🔇 Suppressed AI comment on {filename}:{line_num} due to inline 'ai-ignore' override.")
+                    print(f"🔇 Suppressed AI comment on {filename}:{line_num_int} due to inline 'ai-ignore' override.")
                     continue
         except Exception as e:
             print(f"⚠️ Warning reading file {filename} during suppression check: {e}", file=sys.stderr)
@@ -1184,7 +1201,7 @@ def main():
         return
 
     # Extract exact lines of code modified with their line numbers
-    changes_list = parse_diff_to_changes_list(diff_content)
+    changes_list, changed_lines = parse_diff_to_changes_list(diff_content)
     if not changes_list:
         print("✅ No code additions or changes found in diff to analyze.")
         return
@@ -1218,8 +1235,8 @@ def main():
         f"For larger context, here is the full unified diff of the changes:\n\n{diff_content}"
     )
 
-    url = f"https://generativelanguage.googleapis.com/{api_version}/models/{model}:generateContent?key={api_key}"
-    headers = {"Content-Type": "application/json"}
+    url = f"https://generativelanguage.googleapis.com/{api_version}/models/{model}:generateContent"
+    headers = {"Content-Type": "application/json", "x-goog-api-key": api_key}
     payload = {
         "contents": [{
             "parts": [{"text": prompt}]
@@ -1253,8 +1270,8 @@ def main():
             sanitized_response = sanitize_json_response(text_response)
             ai_reviews = json.loads(sanitized_response)
             
-            # Apply dynamic inline suppression logic
-            ai_reviews = filter_suppressed_comments(ai_reviews)
+            # Apply dynamic inline suppression and valid-line filtering logic
+            ai_reviews = filter_suppressed_comments(ai_reviews, changed_lines)
             
             with open(output_path, "w", encoding="utf-8") as f:
                 json.dump(ai_reviews, f, indent=2)

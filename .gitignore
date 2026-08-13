@@ -62,3 +62,7 @@ __pycache__/
 
 # workstation setup sentinel file
 .setup_done
+
+# bundled current codebase should not be version controlled
+active-codebase.md
+

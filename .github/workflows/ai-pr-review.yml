@@ -94,7 +94,16 @@ jobs:
               return;
             }
 
-            const comments = (reviewData.comments || []).map(item => {
+            // 🛡️ Programmatically sort comments: CRITICAL findings are sorted to the top
+            const sortedComments = [...(reviewData.comments || [])].sort((a, b) => {
+              const severityA = (a.severity || 'WARNING').toUpperCase();
+              const severityB = (b.severity || 'WARNING').toUpperCase();
+              if (severityA === 'CRITICAL' && severityB !== 'CRITICAL') return -1;
+              if (severityA !== 'CRITICAL' && severityB === 'CRITICAL') return 1;
+              return 0;
+            });
+
+            const comments = sortedComments.map(item => {
               return {
                 path: item.file,
                 line: parseInt(item.line),
@@ -116,7 +125,7 @@ jobs:
             }
 
             // 📣 Always post native workflow annotations for complete visibility in GHA Checks and Files views
-            for (const item of reviewData.comments || []) {
+            for (const item of sortedComments) {
               const annotationProperties = {
                 title: `AI Review: ${item.severity || 'WARNING'}`,
                 file: item.file,
@@ -130,7 +139,7 @@ jobs:
             }
 
             console.log(`Publishing ${comments.length} line-by-line annotations from '${path}'...`);
-
+            
             // 🛡️ Self-healing Fallback Loop (Handles 422 Unprocessable Entity for offset lines)
             try {
               await github.rest.pulls.createReview({
@@ -152,7 +161,7 @@ jobs:
                                   "| Severity | File | Line | Finding / Message |\n" +
                                   "| :--- | :--- | :---: | :--- |\n";
                 
-                for (const item of reviewData.comments || []) {
+                for (const item of sortedComments) {
                   const sevLabel = item.severity === 'CRITICAL' ? '🔴 **CRITICAL**' : '🟡 **WARNING**';
                   const firstLine = item.message.split('\n')[0].replace(/[*`#_]/g, '').trim();
                   const shortTitle = firstLine.length > 80 ? firstLine.substring(0, 80) + '...' : firstLine;
@@ -161,7 +170,7 @@ jobs:
                 
                 summaryBody += "\n---\n\n### 🔍 Detailed Audit Report\n\n";
                 
-                for (const item of reviewData.comments || []) {
+                for (const item of sortedComments) {
                   const sevLabel = item.severity === 'CRITICAL' ? '🔴 CRITICAL' : '🟡 WARNING';
                   summaryBody += `<details open>\n` +
                                  `<summary><b>${sevLabel}: <code>${item.file}</code> (Line ${item.line})</b></summary>\n\n` +
