@@ -37,6 +37,11 @@ jobs:
     if: needs.check-credentials.outputs.enabled == 'true'
     runs-on: ubuntu-latest
     
+        # 🔐 Explicitly grant permissions to allow GITHUB_TOKEN to write pull request reviews
+    permissions:
+      contents: read
+      pull-requests: write
+
     # ⚙️ Centralized File Configurations
     env:
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
@@ -73,6 +78,7 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const fs = require('fs');
+            // Safely inherit the configured JSON path from GHA environment variables
             const path = process.env.GEMINI_OUTPUT_PATH || 'review_output.json';
 
             if (!fs.existsSync(path)) {
