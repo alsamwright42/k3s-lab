@@ -26,9 +26,9 @@ CI           := $(strip $(CI))
 USE_PROFILES := $(strip $(USE_PROFILES))
 
 ENV_FILE := inventory/$(PROFILE).env
-
-# Define the temporary build artifact
-CLEAN_ENV := /tmp/clean.env
+# 🛡️ Workspace-isolated and user-scoped environment file (CWE-377 and Race-Free)
+WORKSPACE_HASH := $(shell echo -n $$(pwd) | sha256sum | cut -c1-8)
+CLEAN_ENV := /tmp/clean-$(shell id -u)-$(WORKSPACE_HASH)-$(PROFILE).env
 
 # =============================================================================
 # 🔐 ENVIRONMENT LOADER

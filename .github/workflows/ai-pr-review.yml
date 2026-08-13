@@ -65,6 +65,8 @@ jobs:
       - name: "Consult Gemini for Code Quality & Security Review"
         run: |
           # Executes the companion Python script, feeding it the PR diff 
+          # Note: Underlying script query-gemini-review.py natively executes 
+          # exponential backoff with jitter on transient 503/429 errors
           python3 scripts/workstation/query-gemini-review.py \
             --diff-path "$GEMINI_DIFF_PATH" \
             --output-path "$GEMINI_OUTPUT_PATH" \
@@ -77,11 +79,10 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const fs = require('fs');
-            // Safely inherit the configured JSON path from GHA environment variables
             const path = process.env.GEMINI_OUTPUT_PATH || 'review_output.json';
 
             if (!fs.existsSync(path)) {
-              console.log("⚠️ No review output file found at " + path + ". Skipping annotation posting.");
+              console.log(`⚠️ No review output file found at '${path}'. Skipping annotation posting.`);
               return;
             }
 
@@ -114,8 +115,10 @@ jobs:
               return;
             }
 
+            console.log(`Publishing ${comments.length} line-by-line annotations from '${path}'...`);
+
+            // 🛡️ Self-healing Fallback Loop (Handles 422 Unprocessable Entity for offset lines)
             try {
-              console.log(`Publishing ${comments.length} line-by-line annotations from '${path}'...`);
               await github.rest.pulls.createReview({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
@@ -124,16 +127,18 @@ jobs:
                 event: 'COMMENT',
                 comments: comments
               });
-              console.log("✅ Successfully posted line-by-line annotations!");
             } catch (error) {
               if (error.status === 422) {
-                console.log("⚠️ GitHub API rejected line-by-line review comments (likely because one or more line numbers did not exist in the PR diff).");
+                console.log("⚠️ 422 Error: GitHub API rejected line-by-line review comments.");
                 console.log("🔄 Self-Healing: Falling back to a unified top-level PR summary comment to preserve findings...");
                 
-                let summaryBody = "🤖 **Gemini AI Code Quality & Security Audit (Unified Report)**\n\nSome suggestions could not be mapped directly to lines in the active pull request diff. Here is the full list of findings:\n\n";
-                
-                for (const item of (reviewData.comments || [])) {
-                  summaryBody += `* 📁 **File**: \`${item.file}\` | 🔢 **Line**: \`${item.line}\`\n  ${item.message}\n\n`;
+                let summaryBody = "🤖 **Gemini AI Code Quality & Security Audit (Summary Fallback)**\n\n" +
+                                  "Some review comments could not be attached directly to their lines. Please find the compiled list of findings below:\n\n" +
+                                  "| Severity | File | Line | Finding / Message |\n" +
+                                  "| :--- | :--- | :--- | :--- |\n";
+
+                for (const item of reviewData.comments || []) {
+                  summaryBody += `| **WARNING** | \`${item.file}\` | \`${item.line}\` | ${item.message.replace(/\n/g, " ")} |\n`;
                 }
                 
                 await github.rest.pulls.createReview({
@@ -143,9 +148,7 @@ jobs:
                   body: summaryBody,
                   event: 'COMMENT'
                 });
-                console.log("✅ Successfully posted the unified fallback review summary!");
               } else {
-                // If it is an auth or api error other than line mismatch (422), fail loud
-                throw error;
+                throw error;  // Re-throw fatal non-422 exceptions
               }
             }

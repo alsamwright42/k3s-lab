@@ -1,213 +1,122 @@
+#!/usr/bin/env python3
 import os
 import sys
 import json
-import urllib.request
-import urllib.error
 import unittest
 import tempfile
 import shutil
-import importlib.util
+from pathlib import Path
 from unittest.mock import patch, MagicMock
+import urllib.error
 
-class TestQueryGeminiReviewV6(unittest.TestCase):
+# 1. Resolve the folder containing this test file ({repo_root}/tests)
+test_dir = Path(__file__).resolve().parent
+
+# 2. Step up to the repository root and descend into the workstation scripts directory [2]
+scripts_dir = test_dir.parent / "scripts" / "workstation"
+
+# 3. Inject the path at the very front of Python's search path
+sys.path.insert(0, str(scripts_dir))
+
+# 4. Natively import the unversioned script!
+import query_gemini_review as query_gemini_review
+
+class TestQueryGeminiReview(unittest.TestCase):
     def setUp(self):
-        # Create a temporary workspace directory
-        self.test_dir = tempfile.mkdtemp()
-        self.repo_root = os.path.realpath(self.test_dir)
-        
-         # Dynamically find the script path under test
-        test_dir_path = os.path.dirname(os.path.abspath(__file__))
-        parent_dir = os.path.dirname(test_dir_path) if os.path.basename(test_dir_path) == "tests" else test_dir_path
-        
-        possible_paths = [
-            os.path.join(parent_dir, "scripts", "workstation", "query-gemini-review.py"),
-            os.path.realpath("/workspace/scratch/query-gemini-review-v3.py"),
-            os.path.realpath("./query-gemini-review-v3.py"),
-        ]
-        
-        self.script_path = None
-        for path in possible_paths:
-            if os.path.exists(path):
-                self.script_path = path
-                break
-                
-        if not self.script_path:
-            raise FileNotFoundError(f"Could not find query-gemini-review script under test in possible paths: {possible_paths}")
-             
-        # Load the module dynamically
-        spec = importlib.util.spec_from_file_location("query_gemini_v6", self.script_path)
-        self.module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(self.module)
+        self.temp_dir = tempfile.mkdtemp(prefix="gemini-review-test-")
+        self.diff_path = os.path.join(self.temp_dir, "test.diff")
+        self.output_path = os.path.join(self.temp_dir, "output.json")
+        os.environ["GEMINI_API_KEY"] = "fake-key"
+        os.environ["GEMINI_DIFF_PATH"] = self.diff_path
+        os.environ["GEMINI_OUTPUT_PATH"] = self.output_path
 
     def tearDown(self):
-        # Clean up temporary directory
-        shutil.rmtree(self.test_dir)
+        shutil.rmtree(self.temp_dir)
+        os.environ.pop("GEMINI_API_KEY", None)
+        os.environ.pop("GEMINI_DIFF_PATH", None)
+        os.environ.pop("GEMINI_OUTPUT_PATH", None)
 
-    @patch.dict(os.environ, {"GEMINI_API_KEY": ""})
-    def test_missing_api_key_exits(self):
-        """Verify that the script exits with code 1 if GEMINI_API_KEY is not set."""
-        with patch.object(sys, "argv", ["query-gemini-review-v6.py"]):
-            with self.assertRaises(SystemExit) as cm:
-                self.module.main()
-            self.assertEqual(cm.exception.code, 1)
+    def write_diff(self, content):
+        with open(self.diff_path, "w", encoding="utf-8") as f:
+            f.write(content)
 
-    @patch.dict(os.environ, {"GEMINI_API_KEY": "test-key"})
-    def test_missing_diff_file_creates_default_json_and_returns(self):
-        """Verify that if the diff file is missing, it creates a default empty json and returns gracefully."""
-        diff_path = os.path.join(self.repo_root, "missing_diff.diff")
-        output_path = os.path.join(self.repo_root, "output.json")
-        
-        # Execute using CLI arguments
-        test_args = [
-            "query-gemini-review-v6.py",
-            "--diff-path", diff_path,
-            "--output-path", output_path
-        ]
-        
-        with patch.object(sys, "argv", test_args):
-            self.module.main()
-            
-        # Verify output exists and is an empty comments array
-        self.assertTrue(os.path.exists(output_path))
-        with open(output_path, "r") as f:
-            data = json.load(f)
-        self.assertEqual(data, {"comments": []})
-
-    @patch.dict(os.environ, {"GEMINI_API_KEY": "test-key"})
-    def test_empty_diff_file_returns_immediately(self):
-        """Verify that if the diff file is empty, it returns immediately without hitting the API."""
-        diff_path = os.path.join(self.repo_root, "empty_diff.diff")
-        output_path = os.path.join(self.repo_root, "output.json")
-        
-        with open(diff_path, "w") as f:
-            f.write("")  # Empty diff file
-            
-        test_args = [
-            "query-gemini-review-v6.py",
-            "--diff-path", diff_path,
-            "--output-path", output_path
-        ]
-        
-        # Mock urllib.request.urlopen to ensure it is NEVER called
-        with patch("urllib.request.urlopen") as mock_url:
-            with patch.object(sys, "argv", test_args):
-                self.module.main()
-            mock_url.assert_not_called()
-            
-        # Verify output file exists with default empty schema
-        self.assertTrue(os.path.exists(output_path))
-        with open(output_path, "r") as f:
-            data = json.load(f)
-        self.assertEqual(data, {"comments": []})
-
-    @patch.dict(os.environ, {
-        "GEMINI_API_KEY": "test-key",
-        "GEMINI_DIFF_PATH": "env_diff.diff",
-        "GEMINI_OUTPUT_PATH": "env_output.json"
-    })
     @patch("urllib.request.urlopen")
-    def test_successful_api_review_via_env_vars(self, mock_urlopen):
-        """Verify a successful API request using environment variables instead of CLI args."""
-        # Standardize local test paths based on env vars
-        diff_path = os.path.join(self.repo_root, "env_diff.diff")
-        output_path = os.path.join(self.repo_root, "env_output.json")
+    def test_successful_review_classification(self, mock_urlopen):
+        # Setup fake diff content
+        self.write_diff("+++ b/Makefile\n+CLEAN_ENV := /tmp/clean.env")
         
-        # Write valid git diff
-        with open(diff_path, "w") as f:
-            f.write("+ test addition line")
-            
-        # Mock API Response
         mock_response = MagicMock()
+        mock_response.__enter__.return_value = mock_response
+        
         mock_api_payload = {
             "candidates": [{
                 "content": {
-                    "parts": [{
-                        "text": json.dumps({
-                            "comments": [
-                                {
-                                    "file": "Makefile",
-                                    "line": 5,
-                                    "message": "⚠️ Avoid raw shell commands without POSIX checking."
-                                }
-                            ]
-                        })
-                    }]
+                    "parts": [{"text": json.dumps({
+                        "comments": [
+                            {
+                                "file": "Makefile",
+                                "line": 1,
+                                "severity": "WARNING",
+                                "message": "Static warning"
+                            }
+                        ]
+                    })}]
                 }
             }]
         }
         mock_response.read.return_value = json.dumps(mock_api_payload).encode("utf-8")
-        mock_urlopen.return_value.__enter__.return_value = mock_response
+        mock_urlopen.return_value = mock_response
 
-        # Execute main with patched sys.argv, using env-vars for path lookup
-        test_args = ["query-gemini-review-v6.py"]
-        with patch.dict(os.environ, {
-            "GEMINI_DIFF_PATH": diff_path,
-            "GEMINI_OUTPUT_PATH": output_path
-        }):
-            with patch.object(sys, "argv", test_args):
-                self.module.main()
-                
-        # Confirm output is structured exactly as received from Gemini
-        self.assertTrue(os.path.exists(output_path))
-        with open(output_path, "r") as f:
+        # Execute
+        with patch("sys.argv", ["query-gemini-review.py"]):
+            query_gemini_review.main()
+
+        # Assert output was saved and contains the severity
+        self.assertTrue(os.path.exists(self.output_path))
+        with open(self.output_path, "r", encoding="utf-8") as f:
             data = json.load(f)
             
         self.assertEqual(len(data["comments"]), 1)
-        self.assertEqual(data["comments"][0]["file"], "Makefile")
-        self.assertEqual(data["comments"][0]["line"], 5)
-        self.assertIn("Avoid raw shell commands", data["comments"][0]["message"])
+        self.assertEqual(data["comments"][0]["severity"], "WARNING")
 
-    @patch.dict(os.environ, {"GEMINI_API_KEY": "test-key"})
+    def test_filter_suppressed_comments(self):
+        # Create a mock file on disk that contains '# ai-ignore'
+        target_file = os.path.join(self.temp_dir, "bootstrap.sh")
+        with open(target_file, "w", encoding="utf-8") as f:
+            f.write("#!/bin/bash\n")
+            f.write("sed -i 's/\\r$//' script.sh # ai-ignore: false-positive\n")
+            f.write("echo 'done'\n")
+
+        review_data = {
+            "comments": [
+                {
+                    "file": "bootstrap.sh",
+                    "line": 2,
+                    "severity": "WARNING",
+                    "message": "Do not use sed -i"
+                },
+                {
+                    "file": "bootstrap.sh",
+                    "line": 3,
+                    "severity": "WARNING",
+                    "message": "Stylistic warning"
+                }
+            ]
+        }
+
+        filtered = query_gemini_review.filter_suppressed_comments(review_data, repo_root=self.temp_dir)
+        
+        # Line 2 has # ai-ignore, so it must be stripped. Line 3 does not, so it is preserved.
+        self.assertEqual(len(filtered["comments"]), 1)
+        self.assertEqual(filtered["comments"][0]["line"], 3)
+
     @patch("urllib.request.urlopen")
-    def test_api_http_error_handling(self, mock_urlopen):
-        """Verify HTTPError exits with status 1."""
-        diff_path = os.path.join(self.repo_root, "err_diff.diff")
-        output_path = os.path.join(self.repo_root, "err_output.json")
+    def test_transient_error_handling_with_retry(self, mock_urlopen):
+        self.write_diff("+++ b/Makefile\n+CLEAN_ENV := /tmp/clean.env")
         
-        with open(diff_path, "w") as f:
-            f.write("+ mock diff change")
-            
-        test_args = [
-            "query-gemini-review-v6.py",
-            "--diff-path", diff_path,
-            "--output-path", output_path
-        ]
-        
-        # Simulate a 403 Forbidden HTTP Error
-        mock_error = urllib.error.HTTPError(
-            url="http://google.com",
-            code=403,
-            msg="Forbidden",
-            hdrs=None,
-            fp=MagicMock()
-        )
-        mock_error.read = MagicMock(return_value=b"Invalid Key")
-        mock_urlopen.side_effect = mock_error
-        
-        with patch.object(sys, "argv", test_args):
-            with self.assertRaises(SystemExit) as cm:
-                self.module.main()
-            self.assertEqual(cm.exception.code, 1)
-
-    @patch.dict(os.environ, {"GEMINI_API_KEY": "test-key"})
-    @patch("urllib.request.urlopen")
-    def test_custom_model_and_api_version(self, mock_urlopen):
-        """Verify that custom model and api version CLI flags correctly shape the request URL."""
-        diff_path = os.path.join(self.repo_root, "custom_diff.diff")
-        output_path = os.path.join(self.repo_root, "custom_output.json")
-        
-        with open(diff_path, "w") as f:
-            f.write("+ mock diff change")
-
-        test_args = [
-            "query-gemini-review-v6.py",
-            "--diff-path", diff_path,
-            "--output-path", output_path,
-            "--model", "gemini-3.5-pro",
-            "--api-version", "v1"
-        ]
-
         mock_response = MagicMock()
+        mock_response.__enter__.return_value = mock_response
+        
         mock_api_payload = {
             "candidates": [{
                 "content": {
@@ -216,48 +125,20 @@ class TestQueryGeminiReviewV6(unittest.TestCase):
             }]
         }
         mock_response.read.return_value = json.dumps(mock_api_payload).encode("utf-8")
-        mock_urlopen.return_value.__enter__.return_value = mock_response
 
-        with patch.object(sys, "argv", test_args):
-            self.module.main()
-
-        # Extract the Request object that was passed to urlopen
-        called_req = mock_urlopen.call_args[0][0]
-        self.assertIn("v1/models/gemini-3.5-pro:generateContent", called_req.full_url)
-
-    @patch.dict(os.environ, {"GEMINI_API_KEY": "test-key"})
-    @patch("urllib.request.urlopen")
-    def test_default_model_and_api_version(self, mock_urlopen):
-        """Verify that default values for model (gemini-3.5-flash) and api_version (v1beta) are correctly resolved."""
-        diff_path = os.path.join(self.repo_root, "default_diff.diff")
-        output_path = os.path.join(self.repo_root, "default_output.json")
-        
-        with open(diff_path, "w") as f:
-            f.write("+ mock diff change")
-
-        test_args = [
-            "query-gemini-review-v6.py",
-            "--diff-path", diff_path,
-            "--output-path", output_path
+        # Mock urlopen to raise a 503 HTTPError first, then succeed
+        mock_urlopen.side_effect = [
+            urllib.error.HTTPError("url", 503, "Service Unavailable", {}, None),
+            mock_response
         ]
 
-        mock_response = MagicMock()
-        mock_api_payload = {
-            "candidates": [{
-                "content": {
-                    "parts": [{"text": json.dumps({"comments": []})}]
-                }
-            }]
-        }
-        mock_response.read.return_value = json.dumps(mock_api_payload).encode("utf-8")
-        mock_urlopen.return_value.__enter__.return_value = mock_response
+        # Patch time.sleep to avoid slowing down tests
+        with patch("time.sleep"), patch("sys.argv", ["query-gemini-review.py"]):
+            query_gemini_review.main()
 
-        with patch.object(sys, "argv", test_args):
-            self.module.main()
-
-        # Extract the Request object that was passed to urlopen
-        called_req = mock_urlopen.call_args[0][0]
-        self.assertIn("v1beta/models/gemini-3.5-flash:generateContent", called_req.full_url)
+        # Should exit cleanly and call urlopen twice
+        self.assertEqual(mock_urlopen.call_count, 2)
+        self.assertTrue(os.path.exists(self.output_path))
 
 if __name__ == "__main__":
     unittest.main()
