@@ -1,6 +1,6 @@
 # 📂 Active Codebase State
 
-Last compiled: 2026-08-13T22:28:36Z
+Last compiled: 2026-08-13T22:49:34Z
 
 This file provides high-density context of tracked configurations for AI alignment.
 
@@ -41,7 +41,6 @@ USE_PROFILES := $(strip $(USE_PROFILES))
 
 ENV_FILE := inventory/$(PROFILE).env
 # 🛡️ Workspace-isolated and user-scoped environment file (CWE-377 and Race-Free)
-WORKSPACE_HASH := $(shell echo -n $$(pwd) | sha256sum | cut -c1-8)
 WORKSPACE_HASH := $(shell (echo -n $$(pwd) | sha256sum 2>/dev/null || echo -n $$(pwd) | shasum -a 256 2>/dev/null || echo "default") | cut -c1-8)
 
 CLEAN_ENV := /tmp/clean-$(shell id -u)-$(WORKSPACE_HASH)-$(PROFILE).env
@@ -493,7 +492,7 @@ helm upgrade --install portainer portainer/portainer \
 
 echo ""
 echo "=== Core Deployment Complete ==="
-echo "Portainer is running. Access it at http://192.168.1.50:30777"kube
+echo "Portainer is running. Access it at http://192.168.1.50:30777"
 ```
 
 ---

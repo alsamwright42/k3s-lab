@@ -64,5 +64,5 @@ __pycache__/
 .setup_done
 
 # bundled current codebase should not be version controlled
-active-codebase.md
+docs/planning/active_codebase.md
 

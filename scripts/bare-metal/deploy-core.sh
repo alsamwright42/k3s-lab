@@ -23,4 +23,4 @@ helm upgrade --install portainer portainer/portainer \
 
 echo ""
 echo "=== Core Deployment Complete ==="
-echo "Portainer is running. Access it at http://192.168.1.50:30777"kube
+echo "Portainer is running. Access it at http://192.168.1.50:30777"

@@ -53,6 +53,7 @@ jobs:
       - name: "Checkout Code"
         uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.pull_request.head.sha }} # 🛡️ Bind checkout strictly to the PR's actual HEAD commit instead of the transient merge commit
           fetch-depth: 0
 
       - name: "Calculate PR Diff"
@@ -66,7 +67,7 @@ jobs:
         run: |
           # Executes the companion Python script, feeding it the PR diff 
           # Note: Underlying script query_gemini_review.py natively executes 
-          # exponential backoff with jitter on transient 503/429 errors
+          # exponential backoff with jitter on transient 503/429 errors.
           python3 scripts/workstation/query_gemini_review.py \
             --diff-path "$GEMINI_DIFF_PATH" \
             --output-path "$GEMINI_OUTPUT_PATH" \
@@ -118,6 +119,7 @@ jobs:
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 pull_number: context.payload.pull_request.number,
+                commit_id: context.payload.pull_request.head.sha, // 🛡️ Anchor review directly to the PR's HEAD commit to prevent 422 rejections
                 body: "🤖 **Gemini AI Review**: Clean bill of health! No syntax issues, credential leaks, or architectural anti-patterns detected.",
                 event: 'APPROVE'
               });
@@ -146,6 +148,7 @@ jobs:
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 pull_number: context.payload.pull_request.number,
+                commit_id: context.payload.pull_request.head.sha, // 🛡️ Anchor review directly to the PR's HEAD commit to prevent 422 rejections
                 body: "🤖 **Gemini AI Code Quality & Security Audit**\n\nI have evaluated your changes. Please review the line-by-line suggestions below to ensure compliance with our cluster standards.",
                 event: 'COMMENT',
                 comments: comments
