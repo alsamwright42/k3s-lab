@@ -65,9 +65,9 @@ jobs:
       - name: "Consult Gemini for Code Quality & Security Review"
         run: |
           # Executes the companion Python script, feeding it the PR diff 
-          # Note: Underlying script query-gemini-review.py natively executes 
+          # Note: Underlying script query_gemini_review.py natively executes 
           # exponential backoff with jitter on transient 503/429 errors
-          python3 scripts/workstation/query-gemini-review.py \
+          python3 scripts/workstation/query_gemini_review.py \
             --diff-path "$GEMINI_DIFF_PATH" \
             --output-path "$GEMINI_OUTPUT_PATH" \
             --model "$GEMINI_MODEL" \
