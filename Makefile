@@ -88,7 +88,7 @@ help: ## Display this help message with target descriptions
 # ==============================================================================
 
 setup: check-workstation-tools setup-githooks ## Bootstrap local WSL workspace and prepare development plane
-  @touch $(SETUP_SENTINEL)
+	@touch $(SETUP_SENTINEL)
 	@echo "=========================================================================="
 	@echo "🎉 SUCCESS: Workspace is configured!"
 	@echo "=========================================================================="
