@@ -15,6 +15,8 @@ echo "=== Syncing Azure Key Vault Credentials to K3s ==="
 echo "Extracting data from Terraform..."
 CLIENT_ID=$(terraform -chdir="${TF_DIR}" output -raw client_id)
 CLIENT_SECRET=$(terraform -chdir="${TF_DIR}" output -raw client_secret)
+KEY_VAULT_URI=$(terraform -chdir="${TF_DIR}" output -raw key_vault_uri)
+export KEY_VAULT_URI
 TENANT_ID=$(terraform -chdir="${TF_DIR}" output -raw tenant_id)
 export TENANT_ID
 

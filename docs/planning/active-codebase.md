@@ -1,6 +1,6 @@
 # 📂 Active Codebase State
 
-Last compiled: 2026-08-13T17:14:10Z
+Last compiled: 2026-08-13T17:46:29Z
 
 This file provides high-density context of tracked configurations for AI alignment.
 
@@ -122,7 +122,7 @@ check-workstation-tools: ## Validate if required binaries are present on disk wi
 		if command -v $$tool > /dev/null 2>&1; then \
 			echo "✅ $$tool is present."; \
 		else \
-			echo "⚠️  WARNING: '$$tool' is missing on this workstation. Some targets may fail."; \			
+			echo "⚠️  WARNING: '$$tool' is missing on this workstation. Some targets may fail."; \
 		fi; \
 	done
 
@@ -275,6 +275,8 @@ echo "=== Syncing Azure Key Vault Credentials to K3s ==="
 echo "Extracting data from Terraform..."
 CLIENT_ID=$(terraform -chdir="${TF_DIR}" output -raw client_id)
 CLIENT_SECRET=$(terraform -chdir="${TF_DIR}" output -raw client_secret)
+KEY_VAULT_URI=$(terraform -chdir="${TF_DIR}" output -raw key_vault_uri)
+export KEY_VAULT_URI
 TENANT_ID=$(terraform -chdir="${TF_DIR}" output -raw tenant_id)
 export TENANT_ID
 

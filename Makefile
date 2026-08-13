@@ -108,7 +108,7 @@ check-workstation-tools: ## Validate if required binaries are present on disk wi
 		if command -v $$tool > /dev/null 2>&1; then \
 			echo "✅ $$tool is present."; \
 		else \
-			echo "⚠️  WARNING: '$$tool' is missing on this workstation. Some targets may fail."; \			
+			echo "⚠️  WARNING: '$$tool' is missing on this workstation. Some targets may fail."; \
 		fi; \
 	done
 
