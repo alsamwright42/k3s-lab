@@ -40,10 +40,37 @@ class TestQueryGeminiReview(unittest.TestCase):
         with open(self.diff_path, "w", encoding="utf-8") as f:
             f.write(content)
 
+    def test_sanitize_json_response(self):
+        # Test cleaning of markdown wrap failures
+        raw = "```json\n{\n  \"comments\": []\n}\n```"
+        self.assertEqual(query_gemini_review.sanitize_json_response(raw), "{\n  \"comments\": []\n}")
+        
+        raw_clean = "{\n  \"comments\": []\n}"
+        self.assertEqual(query_gemini_review.sanitize_json_response(raw_clean), raw_clean)
+
+    def test_parse_diff_to_changes_list(self):
+        diff = (
+            "--- a/Makefile\n"
+            "+++ b/Makefile\n"
+            "@@ -10,3 +10,4 @@\n"
+            " un-changed\n"
+            "+added line 1\n"
+            "+added line 2\n"
+        )
+        res = query_gemini_review.parse_diff_to_changes_list(diff)
+        self.assertIn("=== FILE: Makefile ===", res)
+        self.assertIn("Line 11: added line 1", res)
+        self.assertIn("Line 12: added line 2", res)
+
     @patch("urllib.request.urlopen")
     def test_successful_review_classification(self, mock_urlopen):
-        # Setup fake diff content
-        self.write_diff("+++ b/Makefile\n+CLEAN_ENV := /tmp/clean.env")
+        # Setup valid unified diff content
+        self.write_diff(
+            "--- a/Makefile\n"
+            "+++ b/Makefile\n"
+            "@@ -1,1 +1,2 @@\n"
+            "+CLEAN_ENV := /tmp/clean.env\n"
+        )
         
         mock_response = MagicMock()
         mock_response.__enter__.return_value = mock_response
@@ -112,7 +139,13 @@ class TestQueryGeminiReview(unittest.TestCase):
 
     @patch("urllib.request.urlopen")
     def test_transient_error_handling_with_retry(self, mock_urlopen):
-        self.write_diff("+++ b/Makefile\n+CLEAN_ENV := /tmp/clean.env")
+        # Setup valid unified diff content
+        self.write_diff(
+            "--- a/Makefile\n"
+            "+++ b/Makefile\n"
+            "@@ -1,1 +1,2 @@\n"
+            "+CLEAN_ENV := /tmp/clean.env\n"
+        )
         
         mock_response = MagicMock()
         mock_response.__enter__.return_value = mock_response

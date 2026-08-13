@@ -1,6 +1,6 @@
 # 📂 Active Codebase State
 
-Last compiled: 2026-08-13T20:33:18Z
+Last compiled: 2026-08-13T21:16:49Z
 
 This file provides high-density context of tracked configurations for AI alignment.
 
@@ -42,6 +42,8 @@ USE_PROFILES := $(strip $(USE_PROFILES))
 ENV_FILE := inventory/$(PROFILE).env
 # 🛡️ Workspace-isolated and user-scoped environment file (CWE-377 and Race-Free)
 WORKSPACE_HASH := $(shell echo -n $$(pwd) | sha256sum | cut -c1-8)
+WORKSPACE_HASH := $(shell (echo -n $$(pwd) | sha256sum 2>/dev/null || echo -n $$(pwd) | shasum -a 256 2>/dev/null || echo "default") | cut -c1-8)
+
 CLEAN_ENV := /tmp/clean-$(shell id -u)-$(WORKSPACE_HASH)-$(PROFILE).env
 
 # =============================================================================
@@ -699,6 +701,8 @@ FAILED=0
 
 # Step 1: Active Tracking Audit
 echo -e "\n${BLUE}🔎 Step 1: Checking for actively tracked sensitive files...${NC}"
+# Checks if Git is tracking any files that match sensitive structural patterns
+# Fixes folder path collisions (like external-secrets) by matching specific extensions/filenames
 TRACKED_SECRETS=$(git ls-files | grep -E '(\.tfvars$|\.env$|\.tfstate$|id_rsa|id_ed25519|\.pem$|\.key$|vault-keys\.json|\.kdbx$)' || true)
 
 if [ -n "$TRACKED_SECRETS" ]; then
@@ -717,12 +721,14 @@ fi
 
 # Step 2: Gitignore Enforcement Audit
 echo -e "\n${BLUE}🔎 Step 2: Verifying .gitignore coverage for sensitive files...${NC}"
+# Scans for local credential files that might exist on disk but are not blocked by gitignore rules
 EXISTING_SECRETS=$(find . -type f \( -name "*.env" -o -name "*.tfvars" -o -name "*.tfstate" -o -name "vault-keys.json" -o -name "*.kdbx" \) -not -path '*/.*' -not -path '*/node_modules/*' || true)
 
 if [ -n "$EXISTING_SECRETS" ]; then
     UNIGNORED_SECRETS=""
     while IFS= read -r file; do
         [ -z "$file" ] && continue
+        # git check-ignore returns 0 if ignored, 1 if not ignored
         if ! git check-ignore -q "$file"; then
             UNIGNORED_SECRETS="${UNIGNORED_SECRETS}\n  - $file"
         fi
@@ -742,20 +748,37 @@ fi
 
 # Step 3: High-Entropy Plaintext Scan
 echo -e "\n${BLUE}🔎 Step 3: Scanning files for high-entropy strings and plaintext patterns...${NC}"
+# Searches for plain-text password/token assignments in tracked and untracked non-ignored files
 PATTERN="(password|token|pat|client_secret|client-secret|clientid|client-id|access_key|access-key|api-token|api_token)[[:space:]]*=[[:space:]]*[\"'][a-zA-Z0-9_-]{8,128}[\"']"
 
-SUSPICIOUS_LINES=$(git grep -E -n -i "$PATTERN" -- '*.tf' '*.sh' '*.yaml' '*.yml' '*.env' '*.json' 2>/dev/null || true)
+
+SUSPICIOUS_LINES=""
+# Locate all tracked and untracked non-ignored files of interest
+FILE_LIST=$(git ls-files -c -o --exclude-standard | grep -E '\.(tf|sh|yaml|yml|env|json)$' || true)
+
+if [ -n "$FILE_LIST" ]; then
+    while IFS= read -r line; do
+        [ -z "$line" ] && continue
+        [ -f "$line" ] || continue
+        # Perform grep and prefix with filename
+        MATCHES=$(grep -E -n -i "$PATTERN" "$line" 2>/dev/null | sed "s|^|${line}:|" || true)
+        if [ -n "$MATCHES" ]; then
+            if [ -z "$SUSPICIOUS_LINES" ]; then
+                SUSPICIOUS_LINES="$MATCHES"
+            else
+                SUSPICIOUS_LINES="${SUSPICIOUS_LINES}\n${MATCHES}"
+            fi
+        fi
+    done <<< "$FILE_LIST"        
+fi
 
 if [ -n "$SUSPICIOUS_LINES" ]; then
     echo -e "${YELLOW}⚠️  POTENTIAL PLAIN-TEXT SECRET LEAKS DETECTED:${NC}"
-    echo -e "${YELLOW}The following tracked lines seem to assign sensitive strings in plain text:${NC}"
-    while IFS= read -r line; do
-        [ -z "$line" ] && continue
-        echo -e "  - $line"
-    done <<< "$SUSPICIOUS_LINES"
+    echo -e "${YELLOW}The following files contain matching plain-text sensitive patterns:${NC}"
+    echo -e "$SUSPICIOUS_LINES"
     echo -e "${YELLOW}👉 Ensure these values are abstracted into variables/Azure Key Vault references!${NC}"
 else
-    echo -e "${GREEN}✅ Clean! No obvious plain-text password/token assignments found in tracked files.${NC}"
+    echo -e "${GREEN}✅ Clean! No obvious plain-text password/token assignments found in tracked or staged files.${NC}"
 fi
 
 # Step 4: Line Normalization Check
@@ -1003,6 +1026,7 @@ import urllib.request
 import urllib.error
 import time
 import random
+import re
 
 def parse_args():
     parser = argparse.ArgumentParser(
@@ -1030,35 +1054,51 @@ def parse_args():
     )
     return parser.parse_args()
 
-def parse_ignored_lines(diff_path):
+def parse_diff_to_changes_list(diff_content):
     """
-    Parses the target files in the diff to find lines containing '# ai-ignore'.
-    Returns a dictionary mapping filename to a set of line numbers to ignore.
+    Parses a unified diff and returns a formatted list of files and absolute line numbers
+    indicating where lines of code were added or modified (+ lines).
+    This serves as a high-density index for the LLM to map comments precisely.
     """
-    ignored_lines = {}
-    if not os.path.exists(diff_path):
-        return ignored_lines
-
+    hunk_re = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@")
     current_file = None
-    with open(diff_path, "r", encoding="utf-8") as f:
-        for line in f:
-            if line.startswith("+++ b/"):
-                current_file = line.strip()[6:]
-                ignored_lines[current_file] = set()
-            elif line.startswith("+") and not line.startswith("+++"):
-                added_content = line[1:]
-                if "# ai-ignore" in added_content or "ai-ignore" in added_content:
-                    # We will need to map this back. To be safe, the runner script will
-                    # match issues post-generation, but parsing the files directly is safer.
-                    pass
+    lines_by_file = {}
     
-    # Alternatively, we can read the actual files currently on disk to find lines with '# ai-ignore'
-    # This is 100% reliable since the files on disk match the HEAD state of the PR.
-    return ignored_lines
+    current_line = 0
+    for line in diff_content.splitlines():
+        if line.startswith("+++ b/"):
+            current_file = line[6:].strip()
+            lines_by_file[current_file] = []
+        elif line.startswith("@@"):
+            match = hunk_re.match(line)
+            if match:
+                current_line = int(match.group(1))
+        elif current_file and current_line > 0:
+            if line.startswith("+") and not line.startswith("+++"):
+                lines_by_file[current_file].append((current_line, line[1:]))
+                current_line += 1
+            elif line.startswith("-") and not line.startswith("---"):
+                # Deleted lines do not advance line numbers in the new file
+                pass
+            else:
+                # Unchanged context lines advance the line count
+                current_line += 1
+                
+    # Format into a clean text block
+    formatted_list = []
+    for filename, lines in lines_by_file.items():
+        if lines:
+            formatted_list.append(f"=== FILE: {filename} ===")
+            for line_num, content in lines:
+                formatted_list.append(f"Line {line_num}: {content}")
+            formatted_list.append("") # Spacer
+            
+    return "\n".join(formatted_list)
 
 def filter_suppressed_comments(review_data, repo_root="."):
     """
-    Filters out any comments pointing to lines in files that contain '# ai-ignore'.
+    Filters out any comments pointing to lines in files that contain '# ai-ignore'
+    or standard comment line equivalent 'ai-ignore' overrides.
     """
     comments = review_data.get("comments", [])
     filtered_comments = []
@@ -1083,8 +1123,8 @@ def filter_suppressed_comments(review_data, repo_root="."):
             idx = int(line_num) - 1
             if 0 <= idx < len(lines):
                 target_line = lines[idx]
-                if "# ai-ignore" in target_line or "ai-ignore" in target_line:
-                    print(f"🔇 Suppressed AI comment on {filename}:{line_num} due to inline '# ai-ignore' override.")
+                if "ai-ignore" in target_line:
+                    print(f"離 Suppressed AI comment on {filename}:{line_num} due to inline 'ai-ignore' override.")
                     continue
         except Exception as e:
             print(f"⚠️ Warning reading file {filename} during suppression check: {e}", file=sys.stderr)
@@ -1093,6 +1133,21 @@ def filter_suppressed_comments(review_data, repo_root="."):
         
     review_data["comments"] = filtered_comments
     return review_data
+
+def sanitize_json_response(text):
+    """
+    Safely strips any surrounding markdown code block markers (like ```json ... ```)
+    returned by the LLM before passing it to the json parser.
+    """
+    text = text.strip()
+    if text.startswith("```"):
+        lines = text.splitlines()
+        if lines[0].startswith("```"):
+            lines = lines[1:]
+        if lines and lines[-1].strip() == "```":
+            lines = lines[:-1]
+        text = "\n".join(lines).strip()
+    return text
 
 def main():
     args = parse_args()
@@ -1128,7 +1183,12 @@ def main():
         print(f"✅ PR Diff '{diff_path}' is empty. No changes to analyze.")
         return
 
-    # Prompt engineered to guide the model to perform a rigid code quality & security review
+    # Extract exact lines of code modified with their line numbers
+    changes_list = parse_diff_to_changes_list(diff_content)
+    if not changes_list:
+        print("✅ No code additions or changes found in diff to analyze.")
+        return
+
     prompt = (
         "You are an expert DevOps and Platform Engineer auditing code quality, syntax, "
         "security, and architectural anti-patterns in a Kubernetes homelab. Focus on:\n"
@@ -1151,9 +1211,11 @@ def main():
         "    }\n"
         "  ]\n"
         "}\n\n"
-        "Analyze only the lines showing additions or changes (+ lines) in the diff. "
-        "Identify the file path and line number precisely. If no issues are found, return an empty comments list.\n\n"
-        f"Here is the diff of a Pull Request to analyze:\n\n{diff_content}"
+        "Analyze only the lines showing additions or changes in this PR. "
+        "You MUST map each comment 'file' and 'line' to the exact lines listed below. "
+        "Do not comment on any file or line number that is not listed below. If no issues are found, return an empty comments list.\n\n"
+        f"Here are the exact added/changed files and line numbers in this PR:\n\n{changes_list}\n\n"
+        f"For larger context, here is the full unified diff of the changes:\n\n{diff_content}"
     )
 
     url = f"https://generativelanguage.googleapis.com/{api_version}/models/{model}:generateContent?key={api_key}"
@@ -1185,9 +1247,12 @@ def main():
                 res_data = json.loads(response.read().decode("utf-8"))
             
             text_response = res_data["candidates"][0]["content"]["parts"][0]["text"].strip()
-            ai_reviews = json.loads(text_response)
             
-            # Apply dynamic inline # ai-ignore suppression logic
+            # Sanitize LLM formatting failures before parsing
+            sanitized_response = sanitize_json_response(text_response)
+            ai_reviews = json.loads(sanitized_response)
+            
+            # Apply dynamic inline suppression logic
             ai_reviews = filter_suppressed_comments(ai_reviews)
             
             with open(output_path, "w", encoding="utf-8") as f:
