@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 import os
-from pathlib import Path
 import sys
 import json
 import argparse
@@ -9,6 +8,7 @@ import urllib.error
 import time
 import random
 import re
+from pathlib import Path
 
 def parse_args():
     parser = argparse.ArgumentParser(
@@ -112,14 +112,9 @@ def filter_suppressed_comments(review_data, changed_lines, repo_root="."):
         if (filename, line_num_int) not in changed_lines:
             print(f"🧹 Discarding AI comment on {filename}:{line_num_int} - line is not part of the active PR additions/modifications.")
             continue
-            
-        file_path = os.path.join(repo_root, filename)
-        if not os.path.exists(file_path):
-            filtered_comments.append(comment)
-            continue
-            
+           
         try:
-            # 🛡️ Secure Path Resolution: Resolve '..' and symlinks natively
+            # 🛡️ Secure Path Resolution (CWE-22 Path Traversal Prevention)
             resolved_path = safe_root.joinpath(filename).resolve()
 
             # 🛡️ Boundary Check: Guarantee the path cannot escape safe_root
@@ -153,7 +148,8 @@ def filter_suppressed_comments(review_data, changed_lines, repo_root="."):
 def sanitize_json_response(text):
     """
     Safely strips any surrounding markdown code block markers (like ```json ... ```)
-    returned by the LLM before passing it to the json parser.
+    returned by the LLM before passing it to the json parser, and programmatically
+    repairs any invalid backslash escape sequences to prevent JSONDecodeErrors.
     """
     text = text.strip()
     if text.startswith("```"):
@@ -163,7 +159,41 @@ def sanitize_json_response(text):
         if lines and lines[-1].strip() == "```":
             lines = lines[:-1]
         text = "\n".join(lines).strip()
-    return text
+        
+    # Programmatically repair invalid backslash escapes inside JSON string values
+    fixed = []
+    in_string = False
+    escape = False
+    
+    i = 0
+    while i < len(text):
+        c = text[i]
+        if not in_string:
+            if c == '"':
+                in_string = True
+            fixed.append(c)
+            i += 1
+        else:
+            if escape:
+                if c not in '"\\/bfnrtu':
+                    fixed.insert(-1, '\\')
+                escape = False
+                fixed.append(c)
+                i += 1
+            else:
+                if c == '\\':
+                    escape = True
+                    fixed.append(c)
+                    i += 1
+                elif c == '"':
+                    in_string = False
+                    fixed.append(c)
+                    i += 1
+                else:
+                    fixed.append(c)
+                    i += 1
+                    
+    return "".join(fixed)
 
 def main():
     args = parse_args()
@@ -235,7 +265,10 @@ def main():
     )
 
     url = f"https://generativelanguage.googleapis.com/{api_version}/models/{model}:generateContent"
-    headers = {"Content-Type": "application/json", "x-goog-api-key": api_key}
+    headers = {
+        "Content-Type": "application/json",
+        "x-goog-api-key": api_key
+    }
     payload = {
         "contents": [{
             "parts": [{"text": prompt}]

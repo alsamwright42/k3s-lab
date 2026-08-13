@@ -56,6 +56,17 @@ class TestQueryGeminiReview(unittest.TestCase):
         raw_clean = "{\n  \"comments\": []\n}"
         self.assertEqual(query_gemini_review.sanitize_json_response(raw_clean), raw_clean)
 
+    def test_sanitize_json_response_with_invalid_escapes(self):
+        # Test cleaning of invalid json escape sequences like \escape and \s
+        bad = '{"message": "invalid \\escape \\s and \\d but keep \\n and \\" and \\\\"}'
+        expected = '{"message": "invalid \\\\escape \\\\s and \\\\d but keep \\n and \\" and \\\\"}'
+        sanitized = query_gemini_review.sanitize_json_response(bad)
+        self.assertEqual(sanitized, expected)
+        
+        # Verify it parses correctly now
+        parsed = json.loads(sanitized)
+        self.assertEqual(parsed["message"], 'invalid \\escape \\s and \\d but keep \n and " and \\')
+
     def test_parse_diff_to_changes_list_excludes_docs_and_collects_valid_lines(self):
         diff = (
             "--- a/Makefile\n"
