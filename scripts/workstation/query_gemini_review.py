@@ -105,7 +105,7 @@ def filter_suppressed_comments(review_data, repo_root="."):
             if 0 <= idx < len(lines):
                 target_line = lines[idx]
                 if "ai-ignore" in target_line:
-                    print(f"離 Suppressed AI comment on {filename}:{line_num} due to inline 'ai-ignore' override.")
+                    print(f"🔇 Suppressed AI comment on {filename}:{line_num} due to inline 'ai-ignore' override.")
                     continue
         except Exception as e:
             print(f"⚠️ Warning reading file {filename} during suppression check: {e}", file=sys.stderr)
@@ -224,7 +224,7 @@ def main():
     for attempt in range(max_retries):
         try:
             print(f"🚀 Sending diff from '{diff_path}' to Gemini API ({api_version}/{model}) for secure analysis (Attempt {attempt + 1}/{max_retries})...")
-            with urllib.request.urlopen(req) as response:
+            with urllib.request.urlopen(req, timeout=30) as response:
                 res_data = json.loads(response.read().decode("utf-8"))
             
             text_response = res_data["candidates"][0]["content"]["parts"][0]["text"].strip()

@@ -16,21 +16,29 @@ test_dir = Path(__file__).resolve().parent
 scripts_dir = test_dir.parent / "scripts" / "workstation"
 
 # 3. Inject the path at the very front of Python's search path
-sys.path.insert(0, str(scripts_dir))
+if scripts_dir.exists():
+    sys.path.insert(0, str(scripts_dir))
+else:
+    # Sandbox fallback / local staging runner fallback
+    sys.path.insert(0, str(test_dir))
 
 # 4. Natively import the unversioned script!
-import query_gemini_review as query_gemini_review
+import query_gemini_review
 
 class TestQueryGeminiReview(unittest.TestCase):
     def setUp(self):
+        # Create an isolated temporary directory mimicking the Git repository
         self.temp_dir = tempfile.mkdtemp(prefix="gemini-review-test-")
         self.diff_path = os.path.join(self.temp_dir, "test.diff")
         self.output_path = os.path.join(self.temp_dir, "output.json")
+        
+        # Configure standard environment baseline
         os.environ["GEMINI_API_KEY"] = "fake-key"
         os.environ["GEMINI_DIFF_PATH"] = self.diff_path
         os.environ["GEMINI_OUTPUT_PATH"] = self.output_path
 
     def tearDown(self):
+        # Clean up temporary directories and pop environments cleanly
         shutil.rmtree(self.temp_dir)
         os.environ.pop("GEMINI_API_KEY", None)
         os.environ.pop("GEMINI_DIFF_PATH", None)
@@ -105,8 +113,127 @@ class TestQueryGeminiReview(unittest.TestCase):
             
         self.assertEqual(len(data["comments"]), 1)
         self.assertEqual(data["comments"][0]["severity"], "WARNING")
+        self.assertEqual(data["comments"][0]["file"], "Makefile")
+
+    @patch("urllib.request.urlopen")
+    def test_successful_api_review_via_env_vars(self, mock_urlopen):
+        """Verify a successful API request using environment variables instead of CLI args."""
+        self.write_diff(
+            "--- a/Makefile\n"
+            "+++ b/Makefile\n"
+            "@@ -1,1 +1,2 @@\n"
+            "+CLEAN_ENV := /tmp/clean.env\n"
+        )
+        
+        # Mock API Response
+        mock_response = MagicMock()
+        mock_response.__enter__.return_value = mock_response
+        mock_api_payload = {
+            "candidates": [{
+                "content": {
+                    "parts": [{
+                        "text": json.dumps({
+                            "comments": [
+                                {
+                                    "file": "Makefile",
+                                    "line": 1,
+                                    "severity": "WARNING",
+                                    "message": "Avoid raw shell commands"
+                                }
+                            ]
+                        })
+                    }]
+                }
+            }]
+        }
+        mock_response.read.return_value = json.dumps(mock_api_payload).encode("utf-8")
+        mock_urlopen.return_value = mock_response
+
+        test_args = ["query_gemini_review.py"]
+        with patch.object(sys, "argv", test_args):
+            query_gemini_review.main()
+                
+        # Confirm output is structured exactly as received from Gemini
+        self.assertTrue(os.path.exists(self.output_path))
+        with open(self.output_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            
+        self.assertEqual(len(data["comments"]), 1)
+        self.assertEqual(data["comments"][0]["file"], "Makefile")
+
+    @patch("urllib.request.urlopen")
+    def test_api_http_error_handling_fails_permanently_on_fatal_403(self, mock_urlopen):
+        """Verify that a fatal 403 Forbidden HTTPError does not trigger retries and exits with status 1."""
+        self.write_diff(
+            "--- a/Makefile\n"
+            "+++ b/Makefile\n"
+            "@@ -1,1 +1,2 @@\n"
+            "+CLEAN_ENV := /tmp/clean.env\n"
+        )
+        
+        test_args = [
+            "query_gemini_review.py",
+            "--diff-path", self.diff_path,
+            "--output-path", self.output_path
+        ]
+        
+        # Simulate a 403 Forbidden HTTP Error
+        mock_error = urllib.error.HTTPError(
+            url="http://google.com",
+            code=403,
+            msg="Forbidden",
+            hdrs=None,
+            fp=MagicMock()
+        )
+        mock_error.read = MagicMock(return_value=b"Invalid Key")
+        mock_urlopen.side_effect = mock_error
+        
+        with patch.object(sys, "argv", test_args):
+            with self.assertRaises(SystemExit) as cm:
+                query_gemini_review.main()
+            self.assertEqual(cm.exception.code, 1)
+            # urlopen should only be called once because 403 is non-retryable
+            self.assertEqual(mock_urlopen.call_count, 1)
+
+    @patch("urllib.request.urlopen")
+    def test_custom_model_and_api_version(self, mock_urlopen):
+        """Verify that custom model and api version CLI flags correctly shape the request URL."""
+        self.write_diff(
+            "--- a/Makefile\n"
+            "+++ b/Makefile\n"
+            "@@ -1,1 +1,2 @@\n"
+            "+CLEAN_ENV := /tmp/clean.env\n"
+        )
+
+        test_args = [
+            "query_gemini_review.py",
+            "--diff-path", self.diff_path,
+            "--output-path", self.output_path,
+            "--model", "gemini-3.5-pro",
+            "--api-version", "v1"
+        ]
+
+        mock_response = MagicMock()
+        mock_response.__enter__.return_value = mock_response
+        mock_api_payload = {
+            "candidates": [{
+                "content": {
+                    "parts": [{"text": json.dumps({"comments": []})}]
+                }
+            }]
+        }
+        mock_response.read.return_value = json.dumps(mock_api_payload).encode("utf-8")
+        mock_urlopen.return_value = mock_response
+
+        with patch.object(sys, "argv", test_args):
+            query_gemini_review.main()
+
+        # Extract the Request object that was passed to urlopen
+        called_req = mock_urlopen.call_args[0][0]
+        self.assertIn("v1/models/gemini-3.5-pro:generateContent", called_req.full_url)
 
     def test_filter_suppressed_comments(self):
+        """Verify that filter_suppressed_comments strips comments for lines containing 'ai-ignore'."""
         # Create a mock file on disk that contains '# ai-ignore'
         target_file = os.path.join(self.temp_dir, "bootstrap.sh")
         with open(target_file, "w", encoding="utf-8") as f:
@@ -138,7 +265,9 @@ class TestQueryGeminiReview(unittest.TestCase):
         self.assertEqual(filtered["comments"][0]["line"], 3)
 
     @patch("urllib.request.urlopen")
-    def test_transient_error_handling_with_retry(self, mock_urlopen):
+    @patch("time.sleep")  # Prevent sleeping during testing to speed it up
+    def test_transient_error_handling_with_retry(self, mock_sleep, mock_urlopen):
+        """Verify that a transient 503 error triggers retries and succeeds once the API responds."""
         # Setup valid unified diff content
         self.write_diff(
             "--- a/Makefile\n"
@@ -146,10 +275,26 @@ class TestQueryGeminiReview(unittest.TestCase):
             "@@ -1,1 +1,2 @@\n"
             "+CLEAN_ENV := /tmp/clean.env\n"
         )
-        
-        mock_response = MagicMock()
-        mock_response.__enter__.return_value = mock_response
-        
+
+        test_args = [
+            "query_gemini_review.py",
+            "--diff-path", self.diff_path,
+            "--output-path", self.output_path
+        ]
+
+        # First call returns 503 HTTPError
+        mock_error = urllib.error.HTTPError(
+            url="http://google.com",
+            code=503,
+            msg="Service Unavailable",
+            hdrs=None,
+            fp=MagicMock()
+        )
+        mock_error.read = MagicMock(return_value=b"Temporary Overload")
+
+        # Second call returns 200 OK
+        mock_success_response = MagicMock()
+        mock_success_response.__enter__.return_value = mock_success_response
         mock_api_payload = {
             "candidates": [{
                 "content": {
@@ -157,20 +302,17 @@ class TestQueryGeminiReview(unittest.TestCase):
                 }
             }]
         }
-        mock_response.read.return_value = json.dumps(mock_api_payload).encode("utf-8")
+        mock_success_response.read.return_value = json.dumps(mock_api_payload).encode("utf-8")
 
-        # Mock urlopen to raise a 503 HTTPError first, then succeed
-        mock_urlopen.side_effect = [
-            urllib.error.HTTPError("url", 503, "Service Unavailable", {}, None),
-            mock_response
-        ]
+      # Set side effect: first raise HTTPError, then return successful response
+        mock_urlopen.side_effect = [mock_error, mock_success_response]
 
-        # Patch time.sleep to avoid slowing down tests
-        with patch("time.sleep"), patch("sys.argv", ["query-gemini-review.py"]):
+        with patch.object(sys, "argv", test_args):
             query_gemini_review.main()
 
-        # Should exit cleanly and call urlopen twice
-        self.assertEqual(mock_urlopen.call_count, 2)
+        # Assertions
+        self.assertEqual(mock_urlopen.call_count, 2)  # Proves retry occurred
+        self.assertEqual(mock_sleep.call_count, 1)    # Proves backoff sleep happened  
         self.assertTrue(os.path.exists(self.output_path))
 
 if __name__ == "__main__":

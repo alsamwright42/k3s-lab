@@ -1,6 +1,6 @@
 # 📂 Active Codebase State
 
-Last compiled: 2026-08-13T21:16:49Z
+Last compiled: 2026-08-13T21:47:26Z
 
 This file provides high-density context of tracked configurations for AI alignment.
 
@@ -683,7 +683,7 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 echo -e "${BLUE}=====================================================================${NC}"
-echo -e "${BLUE}🛡️  HOMELAB REPOSITORY SECURITY & SECRETS AUDIT GATE (v3)${NC}"
+echo -e "${BLUE}🛡️  HOMELAB REPOSITORY SECURITY & SECRETS AUDIT GATE${NC}"
 echo -e "${BLUE}=====================================================================${NC}"
 
 # Check if inside a git repo
@@ -769,7 +769,7 @@ if [ -n "$FILE_LIST" ]; then
                 SUSPICIOUS_LINES="${SUSPICIOUS_LINES}\n${MATCHES}"
             fi
         fi
-    done <<< "$FILE_LIST"        
+    done <<< "$FILE_LIST"
 fi
 
 if [ -n "$SUSPICIOUS_LINES" ]; then
@@ -1124,7 +1124,7 @@ def filter_suppressed_comments(review_data, repo_root="."):
             if 0 <= idx < len(lines):
                 target_line = lines[idx]
                 if "ai-ignore" in target_line:
-                    print(f"離 Suppressed AI comment on {filename}:{line_num} due to inline 'ai-ignore' override.")
+                    print(f"🔇 Suppressed AI comment on {filename}:{line_num} due to inline 'ai-ignore' override.")
                     continue
         except Exception as e:
             print(f"⚠️ Warning reading file {filename} during suppression check: {e}", file=sys.stderr)
@@ -1243,7 +1243,7 @@ def main():
     for attempt in range(max_retries):
         try:
             print(f"🚀 Sending diff from '{diff_path}' to Gemini API ({api_version}/{model}) for secure analysis (Attempt {attempt + 1}/{max_retries})...")
-            with urllib.request.urlopen(req) as response:
+            with urllib.request.urlopen(req, timeout=30) as response:
                 res_data = json.loads(response.read().decode("utf-8"))
             
             text_response = res_data["candidates"][0]["content"]["parts"][0]["text"].strip()

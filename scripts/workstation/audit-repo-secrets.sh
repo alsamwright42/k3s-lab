@@ -18,7 +18,7 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 echo -e "${BLUE}=====================================================================${NC}"
-echo -e "${BLUE}🛡️  HOMELAB REPOSITORY SECURITY & SECRETS AUDIT GATE (v3)${NC}"
+echo -e "${BLUE}🛡️  HOMELAB REPOSITORY SECURITY & SECRETS AUDIT GATE${NC}"
 echo -e "${BLUE}=====================================================================${NC}"
 
 # Check if inside a git repo
@@ -104,7 +104,7 @@ if [ -n "$FILE_LIST" ]; then
                 SUSPICIOUS_LINES="${SUSPICIOUS_LINES}\n${MATCHES}"
             fi
         fi
-    done <<< "$FILE_LIST"        
+    done <<< "$FILE_LIST"
 fi
 
 if [ -n "$SUSPICIOUS_LINES" ]; then

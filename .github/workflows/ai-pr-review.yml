@@ -115,6 +115,20 @@ jobs:
               return;
             }
 
+            // 📣 Always post native workflow annotations for complete visibility in GHA Checks and Files views
+            for (const item of reviewData.comments || []) {
+              const annotationProperties = {
+                title: `AI Review: ${item.severity || 'WARNING'}`,
+                file: item.file,
+                startLine: parseInt(item.line)
+              };
+              if (item.severity === 'CRITICAL') {
+                core.error(item.message, annotationProperties);
+              } else {
+                core.warning(item.message, annotationProperties);
+              }
+            }
+
             console.log(`Publishing ${comments.length} line-by-line annotations from '${path}'...`);
 
             // 🛡️ Self-healing Fallback Loop (Handles 422 Unprocessable Entity for offset lines)
@@ -134,11 +148,25 @@ jobs:
                 
                 let summaryBody = "🤖 **Gemini AI Code Quality & Security Audit (Summary Fallback)**\n\n" +
                                   "Some review comments could not be attached directly to their lines. Please find the compiled list of findings below:\n\n" +
+                                  "### 📊 Summary of Findings\n\n" +
                                   "| Severity | File | Line | Finding / Message |\n" +
-                                  "| :--- | :--- | :--- | :--- |\n";
-
+                                  "| :--- | :--- | :---: | :--- |\n";
+                
                 for (const item of reviewData.comments || []) {
-                  summaryBody += `| **WARNING** | \`${item.file}\` | \`${item.line}\` | ${item.message.replace(/\n/g, " ")} |\n`;
+                  const sevLabel = item.severity === 'CRITICAL' ? '🔴 **CRITICAL**' : '🟡 **WARNING**';
+                  const firstLine = item.message.split('\n')[0].replace(/[*`#_]/g, '').trim();
+                  const shortTitle = firstLine.length > 80 ? firstLine.substring(0, 80) + '...' : firstLine;
+                  summaryBody += `| ${sevLabel} | \`${item.file}\` | \`${item.line}\` | ${shortTitle} |\n`;
+                }
+                
+                summaryBody += "\n---\n\n### 🔍 Detailed Audit Report\n\n";
+                
+                for (const item of reviewData.comments || []) {
+                  const sevLabel = item.severity === 'CRITICAL' ? '🔴 CRITICAL' : '🟡 WARNING';
+                  summaryBody += `<details open>\n` +
+                                 `<summary><b>${sevLabel}: <code>${item.file}</code> (Line ${item.line})</b></summary>\n\n` +
+                                 `${item.message}\n\n` +
+                                 `</details>\n\n`;
                 }
                 
                 await github.rest.pulls.createReview({
