@@ -1,6 +1,6 @@
 # 📂 Active Codebase State
 
-Last compiled: 2026-08-13T21:47:26Z
+Last compiled: 2026-08-13T21:59:00Z
 
 This file provides high-density context of tracked configurations for AI alignment.
 
@@ -1243,7 +1243,8 @@ def main():
     for attempt in range(max_retries):
         try:
             print(f"🚀 Sending diff from '{diff_path}' to Gemini API ({api_version}/{model}) for secure analysis (Attempt {attempt + 1}/{max_retries})...")
-            with urllib.request.urlopen(req, timeout=30) as response:
+            # 🛡️ Safe timeout set to 90 seconds to allow the LLM ample processing time on larger structured payloads
+            with urllib.request.urlopen(req, timeout=90) as response:
                 res_data = json.loads(response.read().decode("utf-8"))
             
             text_response = res_data["candidates"][0]["content"]["parts"][0]["text"].strip()
@@ -1269,6 +1270,16 @@ def main():
                 continue
             else:
                 print(f"❌ API HTTP Error: {e.code} - {e.read().decode('utf-8')}", file=sys.stderr)
+                sys.exit(1)
+        except urllib.error.URLError as e:
+            # Handle read operation or socket connection timeouts cleanly with retries
+            if "timed out" in str(e.reason).lower() and attempt < max_retries - 1:
+                sleep_time = initial_delay * (backoff_factor ** attempt) + random.uniform(0.1, 1.0)
+                print(f"⚠️ API Socket Connection timed out ({e.reason}). Retrying in {sleep_time:.2f}s...", file=sys.stderr)
+                time.sleep(sleep_time)
+                continue
+            else:
+                print(f"❌ Connection Error: {e.reason}", file=sys.stderr)
                 sys.exit(1)
         except Exception as e:
             print(f"❌ Error during AI review processing: {e}", file=sys.stderr)
