@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import os
+from pathlib import Path
 import sys
 import json
 import argparse
@@ -90,6 +91,9 @@ def filter_suppressed_comments(review_data, changed_lines, repo_root="."):
     """
     comments = review_data.get("comments", [])
     filtered_comments = []
+
+    # Establish a secure, fully resolved root anchor
+    safe_root = Path(repo_root).resolve()
     
     for comment in comments:
         filename = comment.get("file")
@@ -115,6 +119,20 @@ def filter_suppressed_comments(review_data, changed_lines, repo_root="."):
             continue
             
         try:
+            # 🛡️ Secure Path Resolution: Resolve '..' and symlinks natively
+            resolved_path = safe_root.joinpath(filename).resolve()
+
+            # 🛡️ Boundary Check: Guarantee the path cannot escape safe_root
+            if not resolved_path.is_relative_to(safe_root):
+                print(f"⚠️ Security Alert: Blocked directory traversal attempt to '{filename}'")
+                continue
+                 
+            file_path = resolved_path
+            if not file_path.exists():
+                filtered_comments.append(comment)
+                continue
+
+            # Safely open the vetted, in-bounds file
             with open(file_path, "r", encoding="utf-8") as f:
                 lines = f.readlines()
                 

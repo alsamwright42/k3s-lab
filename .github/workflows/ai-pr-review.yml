@@ -105,10 +105,12 @@ jobs:
             });
 
             const comments = sortedComments.map(item => {
+              const emoji = item.severity === 'CRITICAL' ? '🔴' : '🟡';
+              const sevLabel = `${emoji} **${(item.severity || 'WARNING').toUpperCase()}**`;
               return {
                 path: item.file,
                 line: parseInt(item.line),
-                body: item.message,
+                body: `${sevLabel}\n\n${item.message}`, // 📣 Prefixes emoji + bold label natively to the inline card body!,
                 side: 'RIGHT'
               };
             });
