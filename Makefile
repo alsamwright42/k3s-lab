@@ -26,10 +26,16 @@ CI           := $(strip $(CI))
 USE_PROFILES := $(strip $(USE_PROFILES))
 
 ENV_FILE := inventory/$(PROFILE).env
-# 🛡️ Workspace-isolated and user-scoped environment file (CWE-377 and Race-Free)
-WORKSPACE_HASH := $(shell (echo -n $$(pwd) | sha256sum 2>/dev/null || echo -n $$(pwd) | shasum -a 256 2>/dev/null || echo "default") | cut -c1-8)
 
-CLEAN_ENV := /tmp/clean-$(shell id -u)-$(WORKSPACE_HASH)-$(PROFILE).env
+# 🛡️ Establish a secure, user-owned temporary directory (CWE-377 Compliance)
+UID := $(shell id -u)
+SECURE_TMP_DIR := /tmp/k3s-lab-$(UID)
+# Ensure the secure directory exists with strict permissions (drwx------) before evaluating paths
+_prep_secure_tmp := $(shell mkdir -p $(SECURE_TMP_DIR) && chmod 700 $(SECURE_TMP_DIR))
+
+# Dynamic workspace hashing for isolation
+WORKSPACE_HASH := $(shell (echo -n $$(pwd) | sha256sum 2>/dev/null || echo -n $$(pwd) | shasum -a 256 2>/dev/null || echo "default") | cut -c1-8)
+CLEAN_ENV := $(SECURE_TMP_DIR)/clean-$(WORKSPACE_HASH)-$(PROFILE).env
 
 # =============================================================================
 # 🔐 ENVIRONMENT LOADER
