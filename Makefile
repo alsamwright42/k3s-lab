@@ -76,7 +76,7 @@ DAY0_LOCK := /etc/rancher/k3s/.day0_lock
 		provision-nodes deploy-ha-dns sync-azure-secrets apply-globals \
         kustomize-argocd bootstrap-argocd \
 		deploy-portainer deploy-vaultwarden deploy-vw-backup \
-		bundle
+		bundle clean
 
 help: ## Display this help message with target descriptions
 	@echo "=========================================================================="
@@ -240,4 +240,9 @@ deploy-vw-backup: guard-setup ## Deploy standalone Vaultwarden backup CronJob ma
 bundle: guard-setup ## Bundle the active codebase into a single markdown for AI agent consumption
 	@echo "=== Bundling codebase into a single markdown file ==="
 	./scripts/workstation/bundle-codebase.sh
-	
+
+clean: ## Remove temporary build files and decrypted environment caches
+	@echo "🧹 Wiping secure temporary staging directory..."
+	rm -f $(SECURE_TMP_DIR)/clean-*.env
+	rm -f $(STAGE) $(STAGE_CORE)
+	@echo "✅ Cleanup complete. All decrypted credentials purged from local disk."	
