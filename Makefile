@@ -7,7 +7,7 @@
 
 # Define universal binary requirements. Individual repositories can append 
 # their own specific tools (e.g., REQUIRED_TOOLS += terraform or REQUIRED_TOOLS += mvnw).
-REQUIRED_TOOLS ?= shellcheck git 
+REQUIRED_TOOLS ?= shellcheck git
 
 # Define tools that are required by specific targets
 OPTIONAL_TOOLS ?= python3 terraform kubectl kustomize envsubst ssh
@@ -49,7 +49,7 @@ $(call find_missing_tools,REQUIRED,$(1))\
 $(if $(MISSING_REQUIRED),\
     @echo "❌ ERROR: Required tool(s) missing for target '$@':";\
     $(foreach bin,$(MISSING_REQUIRED),echo "   - $(bin)";)\
-    @echo "🛑 Please install the missing tool(s) and try again." && exit 1;\
+    echo "🛑 Please install the missing tool(s) and try again." && exit 1;\
 )
 endef
 
