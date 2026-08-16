@@ -63,6 +63,10 @@ jobs:
           git diff origin/main...HEAD > "$GEMINI_DIFF_PATH"
           echo "diff_path=$GEMINI_DIFF_PATH" >> "$GITHUB_OUTPUT"
 
+      - name: "Set up Python Environment"
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
       - name: "Consult Gemini for Code Quality & Security Review"
         run: |
           # Executes the companion Python script, feeding it the PR diff 

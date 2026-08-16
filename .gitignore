@@ -66,3 +66,5 @@ __pycache__/
 # bundled current codebase should not be version controlled
 docs/planning/active-codebase.md
 
+# build directory
+/build/

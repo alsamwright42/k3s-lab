@@ -219,5 +219,21 @@ class TestQueryGeminiReview(unittest.TestCase):
         self.assertEqual(mock_urlopen.call_count, 2)
         self.assertTrue(os.path.exists(self.output_path))
 
+    def test_filter_suppressed_comments_blocks_directory_traversal(self):
+        review_data = {
+            "comments": [
+                {
+                    "file": "../../../../etc/passwd",
+                    "line": 1,
+                    "severity": "CRITICAL",
+                    "message": "Dangerous path traversal"
+                }
+            ]
+        }
+        changed_lines = {("../../../../etc/passwd", 1)}
+        
+        filtered = query_gemini_review.filter_suppressed_comments(review_data, changed_lines, repo_root=self.temp_dir)
+        self.assertEqual(len(filtered["comments"]), 0)
+
 if __name__ == "__main__":
     unittest.main()

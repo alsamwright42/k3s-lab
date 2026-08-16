@@ -10,7 +10,7 @@
 REQUIRED_TOOLS ?= shellcheck git 
 
 # Define tools that are required by specific targets
-OPTIONAL_TOOLS = python3 terraform kubectl kustomize envsubst ssh
+OPTIONAL_TOOLS ?= python3 terraform kubectl kustomize envsubst ssh
 
 PROFILE ?= local		## [Optional] Target environment profile. Maps to any 'inventory/<name>.env' file. Default: local
 FORCE ?= false			## [Optional] Bypass safety checks and run-once safety locks. Choices: [true, false]. Default: false
@@ -18,7 +18,7 @@ CI ?= false 			## [Optional] CI/CD Mode. Bypasses local file-sourcing. Choices: 
 USE_PROFILES ?= true	## [Optional] Enable environment variable profile loading. Choices: [true, false]. Default: false
 
 # =============================================================================
-# 🛠️ DEPENDENCY GATES
+# 🛠️ LOCAL HELPER FUNCTIONS
 # =============================================================================
 # Track tool presence status in-memory (TOOL_PRESENT_name = true/false)
 # If a tool has not been evaluated yet, its state is undefined.
@@ -82,6 +82,7 @@ define run_script
 $(1) $(2)
 endef
 
+#
 # =============================================================================
 # 🧼 WHITESPACE SANITIZER (Sanitizes trailing spaces from comments in advance)
 # =============================================================================
@@ -94,9 +95,11 @@ USE_PROFILES := $(strip $(USE_PROFILES))
 ENV_FILE := inventory/$(PROFILE).env
 SANITIZE_SCRIPT := ./scripts/workstation/sanitize-env.sh
 
-# 🛡️ Establish a secure, user-owned temporary directory (CWE-377 Compliance)
+# 🛡️ Establish a secure, user-owned temporary directory (CWE-377 Compliance) and a non-secure build directory
 UID := $(shell id -u)
 SECURE_TMP_DIR := /tmp/k3s-lab-$(UID)
+BUILD_DIR := build
+
 # Ensure the secure directory exists with strict permissions (drwx------) before evaluating paths
 _prep_secure_tmp := $(shell mkdir -p $(SECURE_TMP_DIR) && chmod 700 $(SECURE_TMP_DIR))
 
@@ -115,7 +118,7 @@ else ifeq ($(USE_PROFILES),true)
   # 💻 Profiles Enabled: Enforce loud fail-fast boundary if profile is missing
   ifeq ($(wildcard $(ENV_FILE)),)
     $(error ❌ ERROR: Profile configuration file not found at '$(ENV_FILE)'! Create it or set USE_PROFILES=false)
-  else ifeq ($ wildcard $(SANITIZE_SCRIPT),)
+  else ifeq ($(wildcard $(SANITIZE_SCRIPT)),)
      $(error ❌ ERROR: Environment sanitizer script not found at '$(SANITIZE_SCRIPT)'! Create it or set USE_PROFILES=false)
   else
     # 💻 Local Workstation Mode: Clean, include, and export the selected profile file securely.
@@ -130,8 +133,8 @@ endif
 SETUP_SENTINEL := .setup_done
 
 # Centralized staging files in a secure, unprivileged directory
-STAGE := $(SECURE_TMP_DIR)/kustomize-argocd.yaml
-STAGE_CORE := $(SECURE_TMP_DIR)/kustomize-argocd-core.yaml
+STAGE_kustomize-argocd := $(SECURE_TMP_DIR)/kustomize-argocd.yaml
+STAGE_kustomize-argocd-core := $(SECURE_TMP_DIR)/kustomize-argocd-core.yaml
 DAY0_LOCK := /etc/rancher/k3s/.day0_lock
 
 .PHONY: setup setup-githooks check-workstation-tools guard-setup test help \
@@ -140,7 +143,7 @@ DAY0_LOCK := /etc/rancher/k3s/.day0_lock
 		provision-nodes deploy-ha-dns sync-azure-secrets apply-globals \
         kustomize-argocd bootstrap-argocd \
 		deploy-portainer deploy-vaultwarden deploy-vw-backup \
-		bundle clean
+		bundle clean _is_secure_tmp_safe _is_build_dir_safe
 
 .DEFAULT_GOAL := help
 
@@ -257,16 +260,16 @@ test: guard-setup ## Run the complete workstation test suite
 kustomize-argocd: guard-setup ## Compile Kustomize AST and substitute environment variables
 	@echo "=== Compiling and Verifying ArgoCD Kustomize build ==="
 	$(call require_tools,envsubst kubectl kustomize)
-	kubectl kustomize manifests/base/argocd/ | envsubst > $(STAGE)
-	@echo "✅ Kustomize validation succeeded! Rendered manifest cached at $(STAGE)"
+	kubectl kustomize manifests/base/argocd/ | envsubst > $(STAGE_kustomize-argocd)
+	@echo "✅ Kustomize validation succeeded! Rendered manifest cached at $(STAGE_kustomize-argocd)"
 
 bootstrap-argocd: kustomize-argocd ## Deploy Argo CD controller in two-phase sync pass
 	@echo "=== Deploying Argo CD (GitOps Controller) ==="
 	@echo "=== Phase 1: Filtering & Deploying Argo CD Base (No Custom Kinds) ==="
 	# Uses standard library Python to split and filter out custom kinds (Application, AppProject)
 	$(call require_tools,python3 kubectl)
-	$(call run_script,./scripts/workstation/filter_manifest.py $(STAGE) $(STAGE_CORE))
-	kubectl apply --server-side --force-conflicts -f $(STAGE_CORE)
+	$(call run_script,./scripts/workstation/filter_manifest.py $(STAGE_kustomize-argocd) $(STAGE_kustomize-argocd-core))
+	kubectl apply --server-side --force-conflicts -f $(STAGE_kustomize-argocd-core)
 
 	@echo "=== Waiting for Custom Resource Definitions to stabilize ==="
 	# We block here until the API server officially establishes the Argo CD custom schemas.
@@ -274,8 +277,8 @@ bootstrap-argocd: kustomize-argocd ## Deploy Argo CD controller in two-phase syn
 	
 	@echo "=== Phase 2: Applying Custom Resources ==="
 	# Re-applies the complete manifest including the now-valid custom resources
-	kubectl apply --server-side --force-conflicts -f $(STAGE)
-	@rm -f $(STAGE_CORE)
+	kubectl apply --server-side --force-conflicts -f $(STAGE_kustomize-argocd)
+	@rm -f $(STAGE_kustomize-argocd-core)
 	@echo "🚀 Argo CD successfully bootstrapped!" 
 
 provision-nodes: guard-setup ## Bootstrap K3s server and agent nodes over SSH
@@ -319,8 +322,30 @@ bundle: guard-setup ## Bundle the active codebase into a single markdown for AI 
 # 🧹 CLEANUP CONTROLS
 # ==============================================================================
 
+# 🛡️ Pure GNU Make-level path safety checkers (No subshell spawn overhead, completely decoupled)
+is_secure_tmp_safe = $(and $(1),$(filter /tmp/%,$(1)),$(filter-out /tmp/,$(1)))
+is_build_dir_safe = $(and \
+	$(1),\
+	$(filter-out . ..,$(1)),\
+	$(if $(findstring ..,$(1)),,true),\
+	$(filter-out ~%,$(1)),\
+	$(if $(filter /%,$(1)),$(filter $(CURDIR)/%,$(1)),true),\
+	$(filter-out $(CURDIR) $(CURDIR)/,$(1))\
+)
+
 clean: ## Remove temporary build files and decrypted environment caches
-	@echo "🧹 Wiping secure temporary staging directory..."
-	rm -f $(SECURE_TMP_DIR)/clean-*.env
-	rm -f $(STAGE) $(STAGE_CORE)
-	@echo "✅ Cleanup complete. All decrypted credentials purged from local disk."	
+	@echo "🧹  Wiping workspace build artifacts and secure caches..."
+
+	# 🛡️ Guard 1: Only purge SECURE_TMP_DIR if it is strictly a safe /tmp subdirectory
+	$(if $(call is_secure_tmp_safe,$(SECURE_TMP_DIR)),\
+		@rm -rf "$(SECURE_TMP_DIR)" && echo "✅ Purged secure temp directory: $(SECURE_TMP_DIR)",\
+		@echo "⚠️ Skipped SECURE_TMP_DIR purge: Path is empty, unsafe, or outside /tmp/"\
+	)
+	
+	# 🛡️ Guard 2: Only purge BUILD_DIR if it is a safe relative folder name
+	$(if $(call is_build_dir_safe,$(BUILD_DIR)),\
+		@rm -rf "$(BUILD_DIR)" && echo "✅ Purged local build directory: $(BUILD_DIR)",\
+		@echo "⚠️ Skipped BUILD_DIR purge: Absolute path, home folder, or directory traversal detected"\
+	)
+
+	@echo "✅ Cleanup complete."	

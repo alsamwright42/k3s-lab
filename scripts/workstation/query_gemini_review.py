@@ -235,35 +235,49 @@ def main():
         print("✅ No code additions or changes found in diff to analyze.")
         return
 
-    prompt = (
-        "You are an expert DevOps and Platform Engineer auditing code quality, syntax, "
-        "security, and architectural anti-patterns in a Kubernetes homelab. Focus on:\n"
-        "1. POSIX-safe shell scripting (avoiding bash-isms like '&>' in standard /bin/sh recipes).\n"
-        "2. Safe environment sourcing and dynamic configurations in Makefiles.\n"
-        "3. Terraform module declarations, ensuring required arguments are populated and secrets are sensitive.\n"
-        "4. Kubernetes manifest security (avoiding hardcoded secrets or privileged contexts).\n\n"
-        "Identify issues and classify them strictly as:\n"
-        "- 'CRITICAL': Security vulnerabilities, credential leaks, or fatal syntax errors.\n"
-        "- 'WARNING': Architectural style drift, optimizations, or style issues.\n\n"
-        "You must return your output strictly in JSON format. Do not wrap your response in markdown code blocks. "
-        "The JSON structure must match this exact schema:\n"
-        "{\n"
-        "  \"comments\": [\n"
-        "    {\n"
-        "      \"file\": \"filename\",\n"
-        "      \"line\": line_number_integer,\n"
-        "      \"severity\": \"CRITICAL or WARNING\",\n"
-        "      \"message\": \"Markdown warning/error string\"\n"
-        "    }\n"
-        "  ]\n"
-        "}\n\n"
-        "Analyze only the lines showing additions or changes in this PR. "
-        "You MUST map each comment 'file' and 'line' to the exact lines listed below. "
-        "Do not comment on any file or line number that is not listed below. If no issues are found, return an empty comments list.\n\n"
-        f"Here are the exact added/changed files and line numbers in this PR:\n\n{changes_list}\n\n"
-        f"For larger context, here is the full unified diff of the changes:\n\n{diff_content}"
-    )
+    prompt = f"""You are an expert DevOps and Platform Engineer auditing code quality, syntax, security, and architectural anti-patterns in a Kubernetes homelab.
 
+Perform an exhaustive, line-by-line pass of the diff. Do not stop after finding the first few issues. You must report EVERY valid issue you find, even minor formatting, style violations, or optimization points. Aim to populate the 'comments' array with all detected discrepancies. Do not summarize or group distinct issues into a single comment.
+
+Focus on:
+1. POSIX-safe shell scripting (avoiding bash-isms like '&>' in standard /bin/sh recipes).
+2. Safe environment sourcing and dynamic configurations in Makefiles.
+3. Terraform module declarations, ensuring required arguments are populated and secrets are sensitive.
+4. Kubernetes manifest security (avoiding hardcoded secrets or privileged contexts).
+
+⚠️ CRITICAL CONTEXT: YOU ARE ANALYZING A RAW GIT DIFF, NOT A COMPLETE FILE.
+The first line of any code block you see is NOT necessarily the first line of the file. To prevent false positives, adhere strictly to these rules:
+- Do NOT flag "missing shebangs" (e.g., #!/bin/bash) on shell scripts unless you explicitly see the shebang being deleted in the diff.
+- Do NOT flag "missing imports" or "missing variables" if they might be declared in lines of the file that are outside the current diff hunks.
+- Only report definitive syntax errors, security flaws (CWE), or credential leaks visible within the modified lines.
+
+Identify issues and classify them strictly as:
+- 'CRITICAL': Security vulnerabilities, credential leaks, or fatal syntax errors.
+- 'WARNING': Architectural style drift, optimizations, or style issues.
+
+You must return your output strictly in JSON format. Do not wrap your response in markdown code blocks. The JSON structure must match this exact schema:
+{{
+  "comments": [
+    {{
+      "file": "filename",
+      "line": line_number_integer,
+      "severity": "CRITICAL or WARNING",
+      "message": "Markdown warning/error string"
+    }}
+  ]
+}}
+
+Analyze only the lines showing additions or changes in this PR. You MUST map each comment 'file' and 'line' to the exact lines listed below. Do not comment on any file or line number that is not listed below. If no issues are found, return an empty comments list.
+
+Here are the exact added/changed files and line numbers in this PR:
+
+{changes_list}
+
+For larger context, here is the full unified diff of the changes:
+
+{diff_content}"""
+
+    # 🛡️ Secure Credentials passing using Headers instead of Query Params (Prevents leak in GHA logs)
     url = f"https://generativelanguage.googleapis.com/{api_version}/models/{model}:generateContent"
     headers = {
         "Content-Type": "application/json",

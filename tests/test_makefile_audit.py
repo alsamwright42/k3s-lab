@@ -59,7 +59,7 @@ class TestMakefileAudit(unittest.TestCase):
 
     def write_test_makefile(self, required_tools="", optional_tools=""):
         test_makefile_content = f"""
-# 🟢 Disable profile evaluations during unit testing
+# Disable profile evaluations during unit testing
 USE_PROFILES := false        
 include Makefile
 
@@ -68,7 +68,7 @@ REQUIRED_TOOLS := {required_tools}
 OPTIONAL_TOOLS := {optional_tools}
 
 test-require-success:
-	$(call require_tools,sh)
+    $(call require_tools,sh)
 
 test-require-fail:
 	$(call require_tools,nonexistentbinaryxyz)
