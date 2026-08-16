@@ -105,6 +105,7 @@ test-audit-fail-optional:
         self.assertEqual(result.returncode, 2)
         self.assertIn("❌ ERROR: Required tool(s) missing for target 'test-require-fail':", result.stdout)
         self.assertIn("- nonexistentbinaryxyz", result.stdout)
+        self.assertIn("🛑 Please install the missing tool(s) and try again.", result.stdout)
 
     def test_audit_tools_clean(self):
         self.write_test_makefile()
