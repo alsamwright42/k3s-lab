@@ -34,7 +34,7 @@ class TestAuditWorkspaceBoundaries(unittest.TestCase):
         subprocess.run(["git", "add", relative_path], cwd=self.test_dir, check=True, capture_output=True)
 
     def run_audit(self) -> subprocess.CompletedProcess:
-        """Executes the pre-commit hook script within our isolated git sandbox."""
+        """Executes the audit script within our isolated git sandbox."""
         return subprocess.run(
             ["sh", "scripts/workstation/audit-workspace-boundaries.sh"],
             cwd=self.test_dir,
@@ -49,6 +49,9 @@ class TestAuditWorkspaceBoundaries(unittest.TestCase):
     def test_empty_stage_passes(self):
         """Pre-commit Hook should succeed immediately if no files are staged."""
         result = self.run_audit()
+        print("ger")
+        print(result.stdout)
+        print(result.stderr)
         self.assertEqual(result.returncode, 0)
         self.assertIn("No staged files to audit.", result.stdout)
 
@@ -67,7 +70,7 @@ class TestAuditWorkspaceBoundaries(unittest.TestCase):
 
     def test_root_manifest_leak_fails(self):
         """Staging a compiled manifest directly inside the repository root must trigger a loud failure."""
-        self.stage_file("kustomize-argocd.yaml", "apiVersion: argoproj.io/v1alpha1")
+        self.stage_file("kustomize-argocd.yml", "apiVersion: argoproj.io/v1alpha1")
         result = self.run_audit()
         self.assertEqual(result.returncode, 1)
         self.assertIn("ERROR: Manifest file leaked in repository root", result.stdout)
@@ -84,14 +87,14 @@ class TestAuditWorkspaceBoundaries(unittest.TestCase):
         self.stage_file("manifests/base/leaked-infra.yaml", "kind: Service")
         result = self.run_audit()
         self.assertEqual(result.returncode, 1)
-        self.assertIn("ERROR: Prohibited flat-file inside base/", result.stdout)
+        self.assertIn("ERROR: Prohibited flat-file manifest inside base/", result.stdout)
 
         # Try apps folder flat leak
-        subprocess.run(["git", "rm", "-f", "manifests/base/leaked-infra.yaml"], cwd=self.test_dir, capture_output=True)
-        self.stage_file("manifests/apps/leaked-app.yaml", "kind: Deployment")
+        subprocess.run(["git", "rm", "-f", "manifests/base/leaked-infra.yml"], cwd=self.test_dir, capture_output=True)
+        self.stage_file("manifests/apps/leaked-app.yml", "kind: Deployment")
         result = self.run_audit()
         self.assertEqual(result.returncode, 1)
-        self.assertIn("ERROR: Prohibited flat-file inside apps/", result.stdout)
+        self.assertIn("ERROR: Prohibited flat-file manifest inside apps/", result.stdout)
 
     def test_encapsulated_manifest_subfolder_passes(self):
         """Staging structured manifests inside subfolders (conforming to ADR 002) must succeed cleanly."""

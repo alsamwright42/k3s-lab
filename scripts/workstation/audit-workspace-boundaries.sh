@@ -4,57 +4,61 @@
 
 set -eu
 
-# Retrieve all staged files (Added, Copied, Modified)
-STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM)
+# Create a secure, ephemeral staged file tracker
+STAGED_LIST=$(mktemp)
+git diff --cached --name-only --diff-filter=ACM > "$STAGED_LIST"
 
-if [ -z "$STAGED_FILES" ]; then
+if [ ! -s "$STAGED_LIST" ]; then
+    rm -f "$STAGED_LIST"
     echo "✅ No staged files to audit."
     exit 0
 fi
 
 FAILED=0
 
-for FILE in $STAGED_FILES; do
-    # Enforce strict boundary controls on Kubernetes Manifests (.yaml / .yml)
+# Safely read line-by-line, preserving spaces in file paths
+while read -r FILE; do
+    [ -z "$FILE" ] && continue
+
+    # Rule 2: Enforce K8s subfolder encapsulation (ADR 002)
     case "$FILE" in
         *.yaml|*.yml)
-            # Skip workflow files or other expected system files
             case "$FILE" in
-                .github/workflows/*)
-                    continue
-                    ;;
+                .github/workflows/*) continue ;;
             esac
 
-            # Check for root-level manifest leakage (e.g. kustomize-argocd.yaml in root)
+            # Block root-level manifest leaks
             if [ "$(dirname "$FILE")" = "." ]; then
                 echo "❌ ERROR: Manifest file leaked in repository root: '$FILE'"
-                echo "   All staging manifests must be compiled into the SECURE_TMP_DIR (/tmp) via 'make'."
                 FAILED=1
                 continue
             fi
 
-            # ADR_002 Check: Prohibit flat-filing directly inside manifests/, base/, or apps/
+            # Enforce folder structures strictly using directory names
             DIR_NAME=$(dirname "$FILE")
             case "$DIR_NAME" in
                 manifests)
                     echo "❌ ERROR: Prohibited flat-file manifest detected: '$FILE'"
-                    echo "   ADR 002 mandates that all manifests be structured inside dedicated subfolders."
+                    echo "   ADR 002 mandates that all manifests sit inside dedicated subfolders."
                     FAILED=1
                     ;;
                 manifests/base)
-                    echo "❌ ERROR: Prohibited flat-file inside base/: '$FILE'"
-                    echo "   Move this file into a dedicated subfolder (e.g. manifests/base/argocd/manifest.yaml)."
+                    echo "❌ ERROR: Prohibited flat-file manifest inside base/: '$FILE'"
+                    echo "   ADR 002 mandates that all manifests sit inside dedicated subfolders."
                     FAILED=1
                     ;;
                 manifests/apps)
-                    echo "❌ ERROR: Prohibited flat-file inside apps/: '$FILE'"
-                    echo "   Move this file into a dedicated subfolder (e.g. manifests/apps/portainer/manifest.yaml)."
+                    echo "❌ ERROR: Prohibited flat-file manifest inside apps/: '$FILE'"
+                    echo "   ADR 002 mandates that all manifests sit inside dedicated subfolders."
                     FAILED=1
                     ;;
             esac
             ;;
     esac
-done
+done < "$STAGED_LIST"
+
+# Clean up the ephemeral list immediately
+rm -f "$STAGED_LIST"
 
 if [ "$FAILED" -eq 1 ]; then
     echo "🛑 Boundary Audit Failed! Please resolve the errors above before committing."

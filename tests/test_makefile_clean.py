@@ -81,7 +81,7 @@ test-build-dir-macro:
     def test_makefile_secure_tmp_safe_macro_directly(self):
         """Verify that the Makefile's is_secure_tmp_safe macro evaluates correctly."""
         safe_cases = ["/tmp/k3s-lab-1000", "/tmp/test-folder", "/tmp/a"]
-        unsafe_cases = ["/", "", "/tmp", "/tmp/", "/home/sysop", "relative-folder", "../outside"]
+        unsafe_cases = ["/", "", "/tmp", "/tmp/", "/tmp//", "/home/sysop", "relative-folder", "../outside"]
 
         for path in safe_cases:
             self.write_test_harness(path)

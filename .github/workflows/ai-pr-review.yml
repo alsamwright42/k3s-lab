@@ -46,7 +46,7 @@ jobs:
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
       GEMINI_DIFF_PATH: "pr_changes.diff"
       GEMINI_OUTPUT_PATH: "review_output.json"
-      GEMINI_MODEL: "gemini-3.5-flash"
+      GEMINI_MODEL: "gemini-3.7-flash"
       GEMINI_API_VERSION: "v1beta"
 
     steps:
@@ -60,7 +60,7 @@ jobs:
         id: diff
         run: |
           # Safely get the diff between the merge base and the head of the PR branch
-          git diff origin/main...HEAD > "$GEMINI_DIFF_PATH"
+          git diff origin/${{ github.base_ref }}...HEAD > "$GEMINI_DIFF_PATH"
           echo "diff_path=$GEMINI_DIFF_PATH" >> "$GITHUB_OUTPUT"
 
       - name: "Set up Python Environment"

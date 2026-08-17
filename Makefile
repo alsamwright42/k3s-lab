@@ -111,21 +111,26 @@ CLEAN_ENV := $(SECURE_TMP_DIR)/clean-$(WORKSPACE_HASH)-$(PROFILE).env
 # =============================================================================
 # 🔐 ENVIRONMENT LOADER
 # =============================================================================
-ifeq ($(CI),true)
-  # 🟢 CI/CD Mode: Inherit credentials and vars directly from runner environment
-  $(info === CI/CD Mode: Inheriting environment variables from runner ===)
-else ifeq ($(USE_PROFILES),true)
-  # 💻 Profiles Enabled: Enforce loud fail-fast boundary if profile is missing
-  ifeq ($(wildcard $(ENV_FILE)),)
-    $(error ❌ ERROR: Profile configuration file not found at '$(ENV_FILE)'! Create it or set USE_PROFILES=false)
-  else ifeq ($(wildcard $(SANITIZE_SCRIPT)),)
-     $(error ❌ ERROR: Environment sanitizer script not found at '$(SANITIZE_SCRIPT)'! Create it or set USE_PROFILES=false)
-  else
-    # 💻 Local Workstation Mode: Clean, include, and export the selected profile file securely.
-    $(info === Local Workstation Mode: Sanitizing and loading $(ENV_FILE) ===)
-    $(info $(shell $(SANITIZE_SCRIPT) $(ENV_FILE) $(CLEAN_ENV)))
-    include $(CLEAN_ENV)
-    export  # ai-ignore: Necessary to propagate loaded configurations to envsubst templates during manifest generation
+# 🔌 Bypass profile loading for non-operational utility targets (speeds up help, clean, setup, and tests)
+BYPASS_PROFILE_TARGETS := help clean test setup setup-githooks check-workstation-tools
+
+ifeq ($(filter $(MAKECMDGOALS),$(BYPASS_PROFILE_TARGETS)),)
+  ifeq ($(CI),true)
+    # 🟢 CI/CD Mode: Inherit credentials and vars directly from runner environment
+    $(info === CI/CD Mode: Inheriting environment variables from runner ===)
+  else ifeq ($(USE_PROFILES),true)
+    # 💻 Profiles Enabled: Enforce loud fail-fast boundary if profile is missing
+    ifeq ($(wildcard $(ENV_FILE)),)
+      $(error ❌ ERROR: Profile configuration file not found at '$(ENV_FILE)'! Create it or set USE_PROFILES=false)
+    else ifeq ($(wildcard $(SANITIZE_SCRIPT)),)
+       $(error ❌ ERROR: Environment sanitizer script not found at '$(SANITIZE_SCRIPT)'! Create it or set USE_PROFILES=false)
+    else
+      # 💻 Local Workstation Mode: Clean, include, and export the selected profile file securely.
+      $(info === Local Workstation Mode: Sanitizing and loading $(ENV_FILE) ===)
+      $(info $(shell $(SANITIZE_SCRIPT) $(ENV_FILE) $(CLEAN_ENV)))
+      include $(CLEAN_ENV)
+      export  # ai-ignore: Necessary to propagate loaded configurations to envsubst templates during manifest generation
+    endif
   endif
 endif
 
@@ -268,7 +273,7 @@ bootstrap-argocd: kustomize-argocd ## Deploy Argo CD controller in two-phase syn
 	@echo "=== Phase 1: Filtering & Deploying Argo CD Base (No Custom Kinds) ==="
 	# Uses standard library Python to split and filter out custom kinds (Application, AppProject)
 	$(call require_tools,python3 kubectl)
-	$(call run_script,./scripts/workstation/filter_manifest.py $(STAGE_kustomize-argocd) $(STAGE_kustomize-argocd-core))
+	$(call run_script,./scripts/workstation/filter_manifest.py,$(STAGE_kustomize-argocd) $(STAGE_kustomize-argocd-core))
 	kubectl apply --server-side --force-conflicts -f $(STAGE_kustomize-argocd-core)
 
 	@echo "=== Waiting for Custom Resource Definitions to stabilize ==="
@@ -323,7 +328,8 @@ bundle: guard-setup ## Bundle the active codebase into a single markdown for AI 
 # ==============================================================================
 
 # 🛡️ Pure GNU Make-level path safety checkers (No subshell spawn overhead, completely decoupled)
-is_secure_tmp_safe = $(and $(1),$(filter /tmp/%,$(1)),$(filter-out /tmp/,$(1)))
+is_secure_tmp_safe = $(and $(1),$(filter /tmp/%,$(1)),$(filter-out /tmp /tmp/,$(subst //,/,$(subst //,/,$(strip $(1))))))
+
 is_build_dir_safe = $(and \
 	$(1),\
 	$(filter-out . ..,$(1)),\

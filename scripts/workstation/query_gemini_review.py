@@ -65,6 +65,9 @@ def parse_diff_to_changes_list(diff_content):
                 lines_by_file[current_file].append((current_line, line[1:]))
                 changed_lines.add((current_file, current_line))
                 current_line += 1
+            elif line.startswith("\\"):
+                # Ignore diff metadata lines (e.g., "\ No newline at end of file")
+                pass                
             elif line.startswith("-") and not line.startswith("---"):
                 # Deleted lines do not advance line numbers in the new file
                 pass
