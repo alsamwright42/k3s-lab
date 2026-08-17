@@ -10,12 +10,12 @@ class TestAuditWorkspaceBoundaries(unittest.TestCase):
     def setUp(self):
         # Create isolated temporary directory for Git mocking
         self.test_dir = Path(tempfile.mkdtemp(prefix="git-hook-test-"))
-        
+
         # Initialize a mock Git repository
         subprocess.run(["git", "init", "-b", "main"], cwd=self.test_dir, check=True, capture_output=True)
         subprocess.run(["git", "config", "user.name", "Test Bot"], cwd=self.test_dir, check=True)
         subprocess.run(["git", "config", "user.email", "bot@test.org"], cwd=self.test_dir, check=True)
-        
+
         # Copy the script to test
         self.script_src = Path(__file__).resolve().parents[1] / "scripts" / "workstation" / "audit-workspace-boundaries.sh"
         self.script_dst = self.test_dir / "scripts" / "workstation" / "audit-workspace-boundaries.sh"
@@ -49,9 +49,6 @@ class TestAuditWorkspaceBoundaries(unittest.TestCase):
     def test_empty_stage_passes(self):
         """Pre-commit Hook should succeed immediately if no files are staged."""
         result = self.run_audit()
-        print("ger")
-        print(result.stdout)
-        print(result.stderr)
         self.assertEqual(result.returncode, 0)
         self.assertIn("No staged files to audit.", result.stdout)
 

@@ -6,6 +6,14 @@ set -eu
 
 # Create a secure, ephemeral staged file tracker
 STAGED_LIST=$(mktemp)
+
+# POSIX-compliant cleanup sequence:
+# 1. Force explicit exits on standard interruption signals so the EXIT signal fires.
+trap 'exit 1' INT TERM HUP
+
+# 2. Bind the actual cleanup command strictly to the EXIT signal.
+trap 'rm -f "$STAGED_LIST"' EXIT
+
 git diff --cached --name-only --diff-filter=ACM > "$STAGED_LIST"
 
 if [ ! -s "$STAGED_LIST" ]; then
@@ -56,9 +64,6 @@ while read -r FILE; do
             ;;
     esac
 done < "$STAGED_LIST"
-
-# Clean up the ephemeral list immediately
-rm -f "$STAGED_LIST"
 
 if [ "$FAILED" -eq 1 ]; then
     echo "🛑 Boundary Audit Failed! Please resolve the errors above before committing."

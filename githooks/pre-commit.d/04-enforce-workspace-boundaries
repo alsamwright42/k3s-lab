@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# templates/githooks/pre-commit.d/03-audit-secrets
+# templates/githooks/pre-commit.d/04-enforce-workspace-boundaries
 # Central compliance task to execute workstation Secret Leak audits.
 
 set -euo pipefail
