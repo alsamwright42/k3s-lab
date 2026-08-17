@@ -3,7 +3,6 @@
 
 # =============================================================================
 # ⚙️ CONFIGURATION & EXTENSIONS
-# ⚙️ CONFIGURATION & EXTENSIONS
 # =============================================================================
 
 # Define universal binary requirements. Individual repositories can append 
@@ -50,7 +49,7 @@ $(call find_missing_tools,REQUIRED,$(1))\
 $(if $(MISSING_REQUIRED),\
     @echo "❌ ERROR: Required tool(s) missing for target '$@':";\
     $(foreach bin,$(MISSING_REQUIRED),echo "   - $(bin)";)\
-    @echo "🛑 Please install the missing tool(s) and try again." && exit 1;\
+    echo "🛑 Please install the missing tool(s) and try again." && exit 1;\
 )
 endef
 
@@ -133,27 +132,14 @@ endif
 # Sentinel file indicating onboarding compliance
 SETUP_SENTINEL := .setup_done
 
-# Sentinel file indicating onboarding compliance
-SETUP_SENTINEL := .setup_done
-
 # Centralized staging files in a secure, unprivileged directory
-STAGE_kustomize-argocd := $(SECURE_TMP_DIR)/kustomize-argocd.yaml
-STAGE_kustomize-argocd-core := $(SECURE_TMP_DIR)/kustomize-argocd-core.yaml
 STAGE_kustomize-argocd := $(SECURE_TMP_DIR)/kustomize-argocd.yaml
 STAGE_kustomize-argocd-core := $(SECURE_TMP_DIR)/kustomize-argocd-core.yaml
 DAY0_LOCK := /etc/rancher/k3s/.day0_lock
 
 .PHONY: setup setup-githooks check-workstation-tools guard-setup test help \
         day0-bare-metal platform-core gitops-apps \
-.PHONY: setup setup-githooks check-workstation-tools guard-setup test help \
-        day0-bare-metal platform-core gitops-apps \
         check-day0-lock write-day0-lock \ 
-		provision-nodes deploy-ha-dns sync-azure-secrets apply-globals \
-        kustomize-argocd bootstrap-argocd \
-		deploy-portainer deploy-vaultwarden deploy-vw-backup \
-		bundle clean _is_secure_tmp_safe _is_build_dir_safe
-
-.DEFAULT_GOAL := help
 		provision-nodes deploy-ha-dns sync-azure-secrets apply-globals \
         kustomize-argocd bootstrap-argocd \
 		deploy-portainer deploy-vaultwarden deploy-vw-backup \
@@ -165,7 +151,6 @@ help: ## Display this help message with target descriptions
 	@echo "=========================================================================="
 	@echo " Homelab Cluster Operations Toolchain"
 	@echo "=========================================================================="
-	@echo "Usage: make <target>"
 	@echo "Usage: make <target>"
 	@echo ""
 	@echo "Variables:"
@@ -216,52 +201,10 @@ else ifeq ($(wildcard $(SETUP_SENTINEL)),)
 endif
 
 # ==============================================================================
-# 🛠️ WORKSPACE ONBOARDING TARGETS
-# ==============================================================================
-
-setup: check-workstation-tools setup-githooks ## Bootstrap local WSL workspace and prepare development plane
-	@touch $(SETUP_SENTINEL)
-	@echo "=========================================================================="
-	@echo "🎉 SUCCESS: Workspace is configured!"
-	@echo "=========================================================================="
-
-setup-githooks: ## Activate local Git hooks and map core.hooksPath
-	@echo "⚓ Activating local workstation Git hooks..."
-	$(call require_tools,git)
-	@chmod +x githooks/pre-commit githooks/commit-msg 2>/dev/null || true
-	@chmod +x githooks/pre-commit.d/* githooks/commit-msg.d/* 2>/dev/null || true
-	@chmod +x scripts/workstation/*.sh 2>/dev/null || true
-	@git config core.hooksPath githooks
-	@echo "✅ Git hooks successfully mapped to 'githooks/' and marked executable!"
-
-check-workstation-tools: ## Validate if required binaries are present on disk without hard fail
-	@echo "🔎 Auditing workstation binary toolchain..."
-	$(call audit_tools,$(REQUIRED_TOOLS),$(OPTIONAL_TOOLS))
-
-# Quietly guard critical targets. Supports FORCE=true to allow pipeline/CI bypasses.
-# This must be the first dependency in any target chain that requires a fully initialized workstation.
-guard-setup:
-ifeq ($(FORCE),true)
-	@echo "⚠️ FORCE=true specified. Bypassing workspace setup validation checks!"
-else ifeq ($(CI),true)
-	@echo "🟢 CI/CD environment detected. Bypassing workstation setup check."
-else ifeq ($(wildcard $(SETUP_SENTINEL)),)
-	@echo "=========================================================================="
-	@echo "🛑 REJECTED: Your workspace has not been initialized yet!"
-	@echo "👉 To unblock this target and configure your workstation linter gates,"
-	@echo "   you must run the onboarding target first:"
-	@echo "   "
-	@echo "   make setup"
-	@echo "=========================================================================="
-	@exit 1
-endif
-
-# ==============================================================================
 # 🚀 MACRO ENTRY POINTS (The platform lifecycle)
 # ==============================================================================
 
 # DAY 0: Bare Metal & Host OS Layer (Locked to run-once; override with FORCE=true)
-day0-bare-metal: guard-setup check-day0-lock provision-nodes deploy-ha-dns write-day0-lock ## [Day 0] Provision bare-metal nodes and deploy HA DNS (Keepalived + Pi-hole)
 day0-bare-metal: guard-setup check-day0-lock provision-nodes deploy-ha-dns write-day0-lock ## [Day 0] Provision bare-metal nodes and deploy HA DNS (Keepalived + Pi-hole)
 	@echo "✅ [Day 0 Complete] Physical hosts provisioned and routing is stable."
 
@@ -281,12 +224,10 @@ gitops-apps: bootstrap-argocd ## [Day 2] Delegate all application deployments to
 # ==============================================================================
 
 check-day0-lock: ## Verify if the Day 0 bare-metal layer is already provisioned
-check-day0-lock: ## Verify if the Day 0 bare-metal layer is already provisioned
 ifeq ($(FORCE),true)
 	@echo "⚠️ FORCE=true specified. Bypassing Day 0 run-once safety guards!"
 else
 	@echo "🔍 Checking if Day 0 bare-metal layer is already provisioned..."
-	$(call require_tools,ssh)
 	$(call require_tools,ssh)
 	@if ssh -n -q -o BatchMode=yes $(CONTROL_PLANE_IP) "[ -f $(DAY0_LOCK) ]"; then \
 		echo "❌ ERROR: Day 0 bare-metal setup has already been run on this cluster."; \
@@ -304,7 +245,6 @@ endif
 write-day0-lock:
 	@echo "🔒 Writing Day 0 run-once lock to control plane node..." ## Write the Day 0 lock file to the control plane node
 	$(call require_tools,ssh)
-	$(call require_tools,ssh)
 	@ssh -n -q -o BatchMode=yes $(CONTROL_PLANE_IP) "sudo mkdir -p /etc/rancher/k3s && sudo touch $(DAY0_LOCK)"
 
 # ==============================================================================
@@ -312,19 +252,13 @@ write-day0-lock:
 # ==============================================================================
 
 test: guard-setup ## Run the complete workstation test suite
-test: guard-setup ## Run the complete workstation test suite
 	@echo "=== Running Workstation Test Suite ==="
-	$(call require_tools,python3)
 	$(call require_tools,python3)
 	python3 -m unittest discover -v -s tests -p "test_*.py"
 	@echo "✅ All unit tests passed successfully!"
 
 kustomize-argocd: guard-setup ## Compile Kustomize AST and substitute environment variables
-kustomize-argocd: guard-setup ## Compile Kustomize AST and substitute environment variables
 	@echo "=== Compiling and Verifying ArgoCD Kustomize build ==="
-	$(call require_tools,envsubst kubectl kustomize)
-	kubectl kustomize manifests/base/argocd/ | envsubst > $(STAGE_kustomize-argocd)
-	@echo "✅ Kustomize validation succeeded! Rendered manifest cached at $(STAGE_kustomize-argocd)"
 	$(call require_tools,envsubst kubectl kustomize)
 	kubectl kustomize manifests/base/argocd/ | envsubst > $(STAGE_kustomize-argocd)
 	@echo "✅ Kustomize validation succeeded! Rendered manifest cached at $(STAGE_kustomize-argocd)"
@@ -345,34 +279,20 @@ bootstrap-argocd: kustomize-argocd ## Deploy Argo CD controller in two-phase syn
 	# Re-applies the complete manifest including the now-valid custom resources
 	kubectl apply --server-side --force-conflicts -f $(STAGE_kustomize-argocd)
 	@rm -f $(STAGE_kustomize-argocd-core)
-	kubectl apply --server-side --force-conflicts -f $(STAGE_kustomize-argocd)
-	@rm -f $(STAGE_kustomize-argocd-core)
 	@echo "🚀 Argo CD successfully bootstrapped!" 
 
-provision-nodes: guard-setup ## Bootstrap K3s server and agent nodes over SSH
 provision-nodes: guard-setup ## Bootstrap K3s server and agent nodes over SSH
 	@echo "=== Bootstrapping K3s Nodes ==="
 	$(call require_tools,ssh envsubst)
 	$(call run_script,./scripts/bare-metal/bootstrap.sh)
-	$(call require_tools,ssh envsubst)
-	$(call run_script,./scripts/bare-metal/bootstrap.sh)
 
-deploy-ha-dns: guard-setup ## Deploy Keepalived and Pi-hole for high-availability DNS routing
 deploy-ha-dns: guard-setup ## Deploy Keepalived and Pi-hole for high-availability DNS routing
 	@echo "=== Deploying High-Availability DNS ==="
 	$(call require_tools,ssh)
 	$(call run_script,./scripts/bare-metal/deploy-ha-dns.sh)
-	$(call require_tools,ssh)
-	$(call run_script,./scripts/bare-metal/deploy-ha-dns.sh)
 
-deploy-vaultwarden: guard-setup ## Deploy standalone Vaultwarden Docker container
 deploy-vaultwarden: guard-setup ## Deploy standalone Vaultwarden Docker container
 	@echo "=== Deploying Standalone Vaultwarden ==="
-	$(call require_tools,ssh)
-	$(call run_script,./scripts/bare-metal/deploy-vaultwarden.sh)
-	
-
-sync-azure-secrets: guard-setup ## Sync Azure Key Vault credentials to K3s cluster
 	$(call require_tools,ssh)
 	$(call run_script,./scripts/bare-metal/deploy-vaultwarden.sh)
 	
@@ -384,24 +304,15 @@ sync-azure-secrets: guard-setup ## Sync Azure Key Vault credentials to K3s clust
 	
 
 apply-globals: guard-setup ## Inject homelab global environment ConfigMaps
-	$(call require_tools,ssh)
-	$(call run_script,./scripts/azure/sync-azure-secrets.sh)
-	
-
-apply-globals: guard-setup ## Inject homelab global environment ConfigMaps
 	@echo "=== Injecting global configuration from environment variables ==="
-	$(call require_tools,envsubst kubectl)
 	$(call require_tools,envsubst kubectl)
 	envsubst < manifests/base/globals/homelab-globals.yaml | kubectl apply -f -
 
 deploy-vw-backup: guard-setup ## Deploy standalone Vaultwarden backup CronJob manifest
-deploy-vw-backup: guard-setup ## Deploy standalone Vaultwarden backup CronJob manifest
 	@echo "=== Deploying Vaultwarden Backup CronJob ==="
-	$(call require_tools,envsubst kubectl)
 	$(call require_tools,envsubst kubectl)
 	envsubst '$$INGRESS_IP $$DOMAIN $$VW_URL' < manifests/apps/vaultwarden/vaultwarden-backup-cronjob.yaml | kubectl apply -f -
 
-bundle: guard-setup ## Bundle the active codebase into a single markdown for AI agent consumption
 bundle: guard-setup ## Bundle the active codebase into a single markdown for AI agent consumption
 	@echo "=== Bundling codebase into a single markdown file ==="
 	$(call run_script,./scripts/workstation/bundle-codebase.sh)
@@ -412,7 +323,8 @@ bundle: guard-setup ## Bundle the active codebase into a single markdown for AI 
 # ==============================================================================
 
 # 🛡️ Pure GNU Make-level path safety checkers (No subshell spawn overhead, completely decoupled)
-is_secure_tmp_safe = $(and $(1),$(filter /tmp/%,$(1)),$(filter-out /tmp/,$(1)))
+is_secure_tmp_safe = $(and $(1),$(filter /tmp/%,$(1)),$(filter-out /tmp /tmp/,$(subst //,/,$(subst //,/,$(strip $(1))))))
+
 is_build_dir_safe = $(and \
 	$(1),\
 	$(filter-out . ..,$(1)),\

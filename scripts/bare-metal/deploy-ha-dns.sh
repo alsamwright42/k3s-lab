@@ -26,10 +26,12 @@ for node in "${!HA_NODES[@]}"; do
     echo "--> Provisioning ${node} as ${state} (Priority: ${priority})..."
 
     # 1. Install Keepalived on the host OS
-    ssh -q -o BatchMode=yes "${node}" "sudo apt-get update && sudo apt-get install -y keepalived"
+    ssh -o BatchMode=yes "${node}" "sudo apt-get update && sudo apt-get install -y keepalived"
 
     # 2. Configure Keepalived for the Virtual IP (VIP)
-    cat <<EOF | ssh -q -o BatchMode=yes "${node}" "sudo tee /etc/keepalived/keepalived.conf > /dev/null"
+    # ADR 011 Rule 3 Compliance: Stage config locally in a secure temp file first
+    LOCAL_KEEPALIVED_CONF=$(mktemp)
+    cat <<EOF > "$LOCAL_KEEPALIVED_CONF"
 vrrp_instance VI_CLUSTER_DNS {
     state ${state}
     interface ${INTERFACE}
@@ -46,15 +48,23 @@ vrrp_instance VI_CLUSTER_DNS {
 }
 EOF
 
+    # Copy the clean temp file to the target node's staging directory
+    scp -o BatchMode=yes "$LOCAL_KEEPALIVED_CONF" "${node}:/tmp/keepalived.conf"
+    rm -f "$LOCAL_KEEPALIVED_CONF"
+
+    # Promote the configuration to its protected directory and secure permissions
+    ssh -o BatchMode=yes "${node}" "sudo mkdir -p /etc/keepalived && sudo mv /tmp/keepalived.conf /etc/keepalived/keepalived.conf && sudo chmod 644 /etc/keepalived/keepalived.conf"
+
+
     # Restart and enable Keepalived
-    ssh -q -o BatchMode=yes "${node}" "sudo systemctl restart keepalived && sudo systemctl enable keepalived"
+    ssh -o BatchMode=yes "${node}" "sudo systemctl restart keepalived && sudo systemctl enable keepalived"
 
     # 3. Deploy Standalone Pi-hole via Docker
     echo "    Spinning up Pi-hole container..."
-    ssh -q -o BatchMode=yes "${node}" "sudo docker rm -f pihole 2>/dev/null || true"
+    ssh -o BatchMode=yes "${node}" "sudo docker rm -f pihole || true"
     
     # We publish DNS (53) normally, but map the Web UI to 8053 so it doesn't conflict with Traefik Ingress
-    ssh -q -o BatchMode=yes "${node}" "sudo docker run -d \\
+    ssh -o BatchMode=yes "${node}" "sudo docker run -d \\
         --name pihole \\
         --restart=unless-stopped \\
         -p 53:53/tcp -p 53:53/udp \\
@@ -67,10 +77,21 @@ EOF
 
     # 4. Inject Split-Horizon DNS configuration
     echo "    Applying Split-Horizon DNS rewrite for ${DOMAIN} -> ${VIP}..."
-    ssh -q -o BatchMode=yes "${node}" "sudo bash -c 'echo \"address=/${DOMAIN}/${VIP}\" > /opt/pihole/etc-dnsmasq.d/99-k3s-cluster.conf'"
+    # ADR 011 Rule 3 Compliance: Stage configuration locally
+    LOCAL_PIHOLE_CONF=$(mktemp)
+    echo "address=/${DOMAIN}/${VIP}" > "$LOCAL_PIHOLE_CONF"
+
+    # Copy safely to the remote unprivileged staging ground
+    scp -o BatchMode=yes "$LOCAL_PIHOLE_CONF" "${node}:/tmp/99-k3s-cluster.conf"
+    rm -f "$LOCAL_PIHOLE_CONF"
+
+    # Promote with proper permissions and create directories if missing
+    ssh -o BatchMode=yes "${node}" "sudo mkdir -p /opt/pihole/etc-dnsmasq.d \\
+        && sudo mv /tmp/99-k3s-cluster.conf /opt/pihole/etc-dnsmasq.d/99-k3s-cluster.conf \\
+        && sudo chmod 644 /opt/pihole/etc-dnsmasq.d/99-k3s-cluster.conf"
     
-    # Restart Pi-hole to load the new dnsmasq config
-    ssh -q -o BatchMode=yes "${node}" "sudo docker restart pihole >/dev/null"
+    # ADR 011 Rule 1 Compliance: Restart Pi-hole and allow stderr/stdout to flow cleanly
+    ssh -o BatchMode=yes "${node}" "sudo docker restart pihole"
 
     echo "--> ${node} deployment successful."
     echo ""
