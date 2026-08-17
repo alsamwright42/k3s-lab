@@ -5,9 +5,9 @@
 # ⚙️ CONFIGURATION & EXTENSIONS
 # =============================================================================
 
-# Define universal binary requirements. Individual repositories can append 
+# Define universal binary requirements. Individual repositories can append
 # their own specific tools (e.g., REQUIRED_TOOLS += terraform or REQUIRED_TOOLS += mvnw).
-REQUIRED_TOOLS ?= shellcheck git 
+REQUIRED_TOOLS ?= shellcheck git
 
 # Define tools that are required by specific targets
 OPTIONAL_TOOLS ?= python3 terraform kubectl kustomize envsubst ssh
@@ -54,7 +54,7 @@ $(if $(MISSING_REQUIRED),\
 endef
 
 # ⚠️ Soft Verification: Audits tools and prints diagnostic warnings
-# halts execution with exit code 1 for missing required files only 
+# halts execution with exit code 1 for missing required files only
 define audit_tools
 $(call find_missing_tools,REQUIRED,$(1))\
 $(call find_missing_tools,OPTIONAL,$(2))\
@@ -111,21 +111,26 @@ CLEAN_ENV := $(SECURE_TMP_DIR)/clean-$(WORKSPACE_HASH)-$(PROFILE).env
 # =============================================================================
 # 🔐 ENVIRONMENT LOADER
 # =============================================================================
-ifeq ($(CI),true)
-  # 🟢 CI/CD Mode: Inherit credentials and vars directly from runner environment
-  $(info === CI/CD Mode: Inheriting environment variables from runner ===)
-else ifeq ($(USE_PROFILES),true)
-  # 💻 Profiles Enabled: Enforce loud fail-fast boundary if profile is missing
-  ifeq ($(wildcard $(ENV_FILE)),)
-    $(error ❌ ERROR: Profile configuration file not found at '$(ENV_FILE)'! Create it or set USE_PROFILES=false)
-  else ifeq ($(wildcard $(SANITIZE_SCRIPT)),)
-     $(error ❌ ERROR: Environment sanitizer script not found at '$(SANITIZE_SCRIPT)'! Create it or set USE_PROFILES=false)
-  else
-    # 💻 Local Workstation Mode: Clean, include, and export the selected profile file securely.
-    $(info === Local Workstation Mode: Sanitizing and loading $(ENV_FILE) ===)
-    $(info $(shell $(SANITIZE_SCRIPT) $(ENV_FILE) $(CLEAN_ENV)))
-    include $(CLEAN_ENV)
-    export  # ai-ignore: Necessary to propagate loaded configurations to envsubst templates during manifest generation
+# 🔌 Bypass profile loading for non-operational utility targets (speeds up help, clean, setup, and tests)
+BYPASS_PROFILE_TARGETS := help clean test setup setup-githooks check-workstation-tools
+
+ifeq ($(filter $(MAKECMDGOALS),$(BYPASS_PROFILE_TARGETS)),)
+  ifeq ($(CI),true)
+    # 🟢 CI/CD Mode: Inherit credentials and vars directly from runner environment
+    $(info === CI/CD Mode: Inheriting environment variables from runner ===)
+  else ifeq ($(USE_PROFILES),true)
+    # 💻 Profiles Enabled: Enforce loud fail-fast boundary if profile is missing
+    ifeq ($(wildcard $(ENV_FILE)),)
+      $(error ❌ ERROR: Profile configuration file not found at '$(ENV_FILE)'! Create it or set USE_PROFILES=false)
+    else ifeq ($(wildcard $(SANITIZE_SCRIPT)),)
+       $(error ❌ ERROR: Environment sanitizer script not found at '$(SANITIZE_SCRIPT)'! Create it or set USE_PROFILES=false)
+    else
+      # 💻 Local Workstation Mode: Clean, include, and export the selected profile file securely.
+      $(info === Local Workstation Mode: Sanitizing and loading $(ENV_FILE) ===)
+      $(info $(shell $(SANITIZE_SCRIPT) $(ENV_FILE) $(CLEAN_ENV)))
+      include $(CLEAN_ENV)
+      export  # ai-ignore: Necessary to propagate loaded configurations to envsubst templates during manifest generation
+    endif
   endif
 endif
 
@@ -139,7 +144,7 @@ DAY0_LOCK := /etc/rancher/k3s/.day0_lock
 
 .PHONY: setup setup-githooks check-workstation-tools guard-setup test help \
         day0-bare-metal platform-core gitops-apps \
-        check-day0-lock write-day0-lock \ 
+        check-day0-lock write-day0-lock \
 		provision-nodes deploy-ha-dns sync-azure-secrets apply-globals \
         kustomize-argocd bootstrap-argocd \
 		deploy-portainer deploy-vaultwarden deploy-vw-backup \
@@ -274,12 +279,12 @@ bootstrap-argocd: kustomize-argocd ## Deploy Argo CD controller in two-phase syn
 	@echo "=== Waiting for Custom Resource Definitions to stabilize ==="
 	# We block here until the API server officially establishes the Argo CD custom schemas.
 	kubectl wait --for=condition=Established crd/applications.argoproj.io crd/appprojects.argoproj.io crd/applicationsets.argoproj.io --timeout=60s
-	
+
 	@echo "=== Phase 2: Applying Custom Resources ==="
 	# Re-applies the complete manifest including the now-valid custom resources
 	kubectl apply --server-side --force-conflicts -f $(STAGE_kustomize-argocd)
 	@rm -f $(STAGE_kustomize-argocd-core)
-	@echo "🚀 Argo CD successfully bootstrapped!" 
+	@echo "🚀 Argo CD successfully bootstrapped!"
 
 provision-nodes: guard-setup ## Bootstrap K3s server and agent nodes over SSH
 	@echo "=== Bootstrapping K3s Nodes ==="
@@ -295,13 +300,13 @@ deploy-vaultwarden: guard-setup ## Deploy standalone Vaultwarden Docker containe
 	@echo "=== Deploying Standalone Vaultwarden ==="
 	$(call require_tools,ssh)
 	$(call run_script,./scripts/bare-metal/deploy-vaultwarden.sh)
-	
+
 
 sync-azure-secrets: guard-setup ## Sync Azure Key Vault credentials to K3s cluster
 	@echo "=== Syncing Azure Key Vault Credentials to K3s ==="
 	$(call require_tools,ssh)
 	$(call run_script,./scripts/azure/sync-azure-secrets.sh)
-	
+
 
 apply-globals: guard-setup ## Inject homelab global environment ConfigMaps
 	@echo "=== Injecting global configuration from environment variables ==="
@@ -342,11 +347,11 @@ clean: ## Remove temporary build files and decrypted environment caches
 		@rm -rf "$(SECURE_TMP_DIR)" && echo "✅ Purged secure temp directory: $(SECURE_TMP_DIR)",\
 		@echo "⚠️ Skipped SECURE_TMP_DIR purge: Path is empty, unsafe, or outside /tmp/"\
 	)
-	
+
 	# 🛡️ Guard 2: Only purge BUILD_DIR if it is a safe relative folder name
 	$(if $(call is_build_dir_safe,$(BUILD_DIR)),\
 		@rm -rf "$(BUILD_DIR)" && echo "✅ Purged local build directory: $(BUILD_DIR)",\
 		@echo "⚠️ Skipped BUILD_DIR purge: Absolute path, home folder, or directory traversal detected"\
 	)
 
-	@echo "✅ Cleanup complete."	
+	@echo "✅ Cleanup complete."
