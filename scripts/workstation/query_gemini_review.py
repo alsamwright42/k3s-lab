@@ -46,7 +46,7 @@ def parse_diff_to_changes_list(diff_content):
     current_file = None
     lines_by_file = {}
     changed_lines = set()
-    
+
     current_line = 0
     for line in diff_content.splitlines():
         if line.startswith("+++ b/"):
@@ -65,13 +65,16 @@ def parse_diff_to_changes_list(diff_content):
                 lines_by_file[current_file].append((current_line, line[1:]))
                 changed_lines.add((current_file, current_line))
                 current_line += 1
+            elif line.startswith("\\"):
+                # Ignore diff metadata lines (e.g., "\ No newline at end of file")
+                pass
             elif line.startswith("-") and not line.startswith("---"):
                 # Deleted lines do not advance line numbers in the new file
                 pass
             else:
                 # Unchanged context lines advance the line count
                 current_line += 1
-                
+
     # Format into a clean text block
     formatted_list = []
     for filename, lines in lines_by_file.items():
@@ -80,7 +83,7 @@ def parse_diff_to_changes_list(diff_content):
             for line_num, content in lines:
                 formatted_list.append(f"Line {line_num}: {content}")
             formatted_list.append("") # Spacer
-            
+
     return "\n".join(formatted_list), changed_lines
 
 def filter_suppressed_comments(review_data, changed_lines, repo_root="."):
@@ -94,25 +97,25 @@ def filter_suppressed_comments(review_data, changed_lines, repo_root="."):
 
     # Establish a secure, fully resolved root anchor
     safe_root = Path(repo_root).resolve()
-    
+
     for comment in comments:
         filename = comment.get("file")
         line_num = comment.get("line")
-        
+
         if not filename or not line_num:
             continue
-            
+
         try:
             line_num_int = int(line_num)
         except (ValueError, TypeError):
             continue
-            
+
         # 1. Enforce strict PR diff alignment. If a comment is not on an actively changed line,
         # discard it to guarantee GitHub REST API won't reject the review payload with a 422 error.
         if (filename, line_num_int) not in changed_lines:
             print(f"🧹 Discarding AI comment on {filename}:{line_num_int} - line is not part of the active PR additions/modifications.")
             continue
-           
+
         try:
             # 🛡️ Secure Path Resolution (CWE-22 Path Traversal Prevention)
             resolved_path = safe_root.joinpath(filename).resolve()
@@ -121,7 +124,7 @@ def filter_suppressed_comments(review_data, changed_lines, repo_root="."):
             if not resolved_path.is_relative_to(safe_root):
                 print(f"⚠️ Security Alert: Blocked directory traversal attempt to '{filename}'")
                 continue
-                 
+
             file_path = resolved_path
             if not file_path.exists():
                 filtered_comments.append(comment)
@@ -130,7 +133,7 @@ def filter_suppressed_comments(review_data, changed_lines, repo_root="."):
             # Safely open the vetted, in-bounds file
             with open(file_path, "r", encoding="utf-8") as f:
                 lines = f.readlines()
-                
+
             idx = line_num_int - 1
             if 0 <= idx < len(lines):
                 target_line = lines[idx]
@@ -139,9 +142,9 @@ def filter_suppressed_comments(review_data, changed_lines, repo_root="."):
                     continue
         except Exception as e:
             print(f"⚠️ Warning reading file {filename} during suppression check: {e}", file=sys.stderr)
-            
+
         filtered_comments.append(comment)
-        
+
     review_data["comments"] = filtered_comments
     return review_data
 
@@ -159,12 +162,12 @@ def sanitize_json_response(text):
         if lines and lines[-1].strip() == "```":
             lines = lines[:-1]
         text = "\n".join(lines).strip()
-        
+
     # Programmatically repair invalid backslash escapes inside JSON string values
     fixed = []
     in_string = False
     escape = False
-    
+
     i = 0
     while i < len(text):
         c = text[i]
@@ -192,12 +195,12 @@ def sanitize_json_response(text):
                 else:
                     fixed.append(c)
                     i += 1
-                    
+
     return "".join(fixed)
 
 def main():
     args = parse_args()
-    
+
     api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key:
         print("❌ Error: GEMINI_API_KEY environment variable is not set.", file=sys.stderr)
@@ -309,19 +312,19 @@ For larger context, here is the full unified diff of the changes:
             # 🛡️ Safe timeout set to 90 seconds to allow the LLM ample processing time on larger structured payloads
             with urllib.request.urlopen(req, timeout=90) as response:
                 res_data = json.loads(response.read().decode("utf-8"))
-            
+
             text_response = res_data["candidates"][0]["content"]["parts"][0]["text"].strip()
-            
+
             # Sanitize LLM formatting failures before parsing
             sanitized_response = sanitize_json_response(text_response)
             ai_reviews = json.loads(sanitized_response)
-            
+
             # Apply dynamic inline suppression and valid-line filtering logic
             ai_reviews = filter_suppressed_comments(ai_reviews, changed_lines)
-            
+
             with open(output_path, "w", encoding="utf-8") as f:
                 json.dump(ai_reviews, f, indent=2)
-            
+
             print(f"✅ AI Review completed. Issues found: {len(ai_reviews.get('comments', []))}. Saved results to '{output_path}'.")
             break
 

@@ -11,7 +11,7 @@ echo "=== Deploying Core Infrastructure Utilities ==="
 echo "--> Updating Helm repositories..."
 helm repo add portainer https://portainer.github.io/k8s/
 # (We will add Traefik and Cert-Manager repos here later)
-helm repo update >/dev/null
+helm repo update
 
 # 2. Deploy Portainer using your version-controlled values
 echo "--> Deploying Portainer to KC01..."

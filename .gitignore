@@ -68,3 +68,6 @@ docs/planning/active-codebase.md
 
 # build directory
 /build/
+
+# temp folder for local testing manifests
+manifests/base/temp/

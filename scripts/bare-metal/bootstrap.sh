@@ -16,7 +16,7 @@ wait_for_condition() {
     echo "Waiting: ${message}..."
     for ((i=1; i<=retries; i++)); do
         # Execute the command silently
-        if "${cmd[@]}" >/dev/null 2>&1; then
+        if "${cmd[@]}" >/dev/null; then
             echo "  -> Success!"
             return 0
         fi
@@ -60,7 +60,7 @@ CLUSTER_NODES=("CONTROL_PLANE_NODE" "${!WORKER_NODES[@]}")
 echo "=== K3s Lab Connectivity Check ==="
 # Check Control Plane
 echo -n "Testing SSH connection to ${CONTROL_PLANE_NODE}... "
-if ssh -n -q -o BatchMode=yes -o ConnectTimeout=5 "${CONTROL_PLANE_NODE}" exit; then 
+if ssh -n -o BatchMode=yes -o ConnectTimeout=5 "${CONTROL_PLANE_NODE}" exit; then 
     echo "Control plane connectivity verified."
 else
     echo "FAILED: Cannot reach control plane node."
@@ -70,7 +70,7 @@ fi
 
 for node in "${CLUSTER_NODES[@]}"; do
     echo -n "Testing SSH connection to ${node}... "
-    if ssh -n -q -o BatchMode=yes -o ConnectTimeout=5 "${node}" exit; then
+    if ssh -n -o BatchMode=yes -o ConnectTimeout=5 "${node}" exit; then
         echo "OK"
     else
         echo "FAILED"
@@ -92,7 +92,7 @@ echo "=== Deploying Control Plane ($CONTROL_PLANE_NODE) ==="
 scp -o BatchMode=yes "${REPO_ROOT}/infrastructure/nodes/control-plane-config.yaml" "${CONTROL_PLANE_NODE}:/tmp/config.yaml"
 ssh -n -o BatchMode=yes "${CONTROL_PLANE_NODE}" "sudo /usr/local/bin/apply-k3s-node-config.sh control-plane"
 
-wait_for_condition 12 5 "K3s control plane to be ready" ssh -n -o BatchMode=yes "${CONTROL_PLANE_NODE}" "sudo k3s kubectl get nodes 2>/dev/null | grep -q 'Ready'"
+wait_for_condition 12 5 "K3s control plane to be ready" ssh -n -o BatchMode=yes "${CONTROL_PLANE_NODE}" "sudo k3s kubectl get nodes | grep -q 'Ready'"
 
 echo "=== Extracting K3s Token ==="
 # Fetch the token dynamically and export it to memory for the template renderer
@@ -121,7 +121,7 @@ echo "Verifying all registered nodes are Ready..."
 # Loop through every node in the associative array
 for target_node in "${CLUSTER_NODES[@]}"; do
     wait_for_condition 15 4 "Node ${target_node} to report as Ready" \
-        ssh -n -o BatchMode=yes kc01 "sudo k3s kubectl get nodes 2>/dev/null | grep -E '^${target_node}\s+.*Ready'"
+        ssh -n -o BatchMode=yes kc01 "sudo k3s kubectl get nodes | grep -E '^${target_node}\s+.*Ready'"
 done
 
 echo ""
