@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE}")" && pwd)"
-REPO_ROOT="$(cd "$(dirname "$SCRIPT_DIR")/.." && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 # Generic smart polling function
 # Usage: wait_for_condition <retries> <wait_interval_seconds> <"Status Message"> <command...>
@@ -25,24 +25,16 @@ wait_for_condition() {
     done
 
     # If the loop finishes without success, throw an error and halt the script
-    echo "Error: Timed out waiting for ${message} after $(($retries * $wait_time)) seconds." >&2
+    echo "Error: Timed out waiting for ${message} after $((retries * wait_time)) seconds." >&2
     exit 1
 }
 
-# Self-Healing Safety Net: Automatically strip Windows CRLF line endings
-# Excludes this running script to prevent the self-modifying truncation trap.
-for script in "${SCRIPT_DIR}"/*.sh; do
-    if [ -f "$script" ] && [ "$script" != "${BASH_SOURCE}" ]; then
-        sed -i -e 's/\r$//' "$script" 2>/dev/null || true
-    fi
-done
-
 echo "=== Validating and Parsing Node Inventory ==="
-declare -A CLUSTER_NODES
+declare -a CLUSTER_NODES
 
 # Validate and Register Control Plane
 if [ -z "${CONTROL_PLANE_NODE:-}" ]; then
-    echo "FAILED: CONTROL_PLANE_NODE is missing from global.env!"
+    echo "FAILED: CONTROL_PLANE_NODE is missing from the provided environment!"
     exit 1
 fi
 
@@ -68,7 +60,13 @@ CLUSTER_NODES=("CONTROL_PLANE_NODE" "${!WORKER_NODES[@]}")
 echo "=== K3s Lab Connectivity Check ==="
 # Check Control Plane
 echo -n "Testing SSH connection to ${CONTROL_PLANE_NODE}... "
-if ssh -n -q -o BatchMode=yes -o ConnectTimeout=5 "${CONTROL_PLANE_NODE}" exit; then echo "
+if ssh -n -q -o BatchMode=yes -o ConnectTimeout=5 "${CONTROL_PLANE_NODE}" exit; then 
+    echo "Control plane connectivity verified."
+else
+    echo "FAILED: Cannot reach control plane node."
+    exit 1
+fi
+
 
 for node in "${CLUSTER_NODES[@]}"; do
     echo -n "Testing SSH connection to ${node}... "

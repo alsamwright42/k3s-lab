@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
-# This script sanitizes the global.env file by removing comments and trailing whitespace making it compatible with make
+# This script sanitizes a .env file by removing comments and trailing whitespace making it compatible with make
 set -euo pipefail
 
 INPUT_FILE="${1:-}"
 OUTPUT_FILE="${2:-}"
+
 
 if [ -z "$INPUT_FILE" ] || [ -z "$OUTPUT_FILE" ]; then
     echo "FAILED: Both Input and Output files must be provided."

@@ -2,8 +2,8 @@
 set -euo pipefail
 
 # Set paths
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE}")" && pwd)"
-REPO_ROOT="$(dirname "$SCRIPT_DIR")"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 echo "=== Deploying Core Infrastructure Utilities ==="
 
@@ -23,4 +23,4 @@ helm upgrade --install portainer portainer/portainer \
 
 echo ""
 echo "=== Core Deployment Complete ==="
-echo "Portainer is running. Access it at http://192.168.1.50:30777"kube
+echo "Portainer is running. Access it at http://192.168.1.50:30777"

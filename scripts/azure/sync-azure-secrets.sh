@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Anchor paths to the script directory
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE}")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 
 # Define clean absolute paths for Terraform and manifest directories
@@ -15,8 +15,10 @@ echo "=== Syncing Azure Key Vault Credentials to K3s ==="
 echo "Extracting data from Terraform..."
 CLIENT_ID=$(terraform -chdir="${TF_DIR}" output -raw client_id)
 CLIENT_SECRET=$(terraform -chdir="${TF_DIR}" output -raw client_secret)
-export KEY_VAULT_URI=$(terraform -chdir="${TF_DIR}" output -raw key_vault_uri)
-export TENANT_ID=$(terraform -chdir="${TF_DIR}" output -raw tenant_id)
+KEY_VAULT_URI=$(terraform -chdir="${TF_DIR}" output -raw key_vault_uri)
+export KEY_VAULT_URI
+TENANT_ID=$(terraform -chdir="${TF_DIR}" output -raw tenant_id)
+export TENANT_ID
 
 # Inject into K3s idempotently (creates or updates the secret)
 echo "Injecting credentials into the external-secrets namespace..."

@@ -59,3 +59,12 @@ __pycache__/
 *.pyc
 *.pyo
 .pytest_cache/
+
+# workstation setup sentinel file
+.setup_done
+
+# bundled current codebase should not be version controlled
+docs/planning/active-codebase.md
+
+# build directory
+/build/

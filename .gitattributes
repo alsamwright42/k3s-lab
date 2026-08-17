@@ -1,0 +1,15 @@
+# Auto-detect text files and normalize them to LF line endings on check-in
+* text=auto eol=lf
+
+# Explicitly enforce LF for script and configuration assets
+*.sh text eol=lf
+*.tf text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+*.md text eol=lf
+
+# Protect binary assets from normalization corruption
+*.png binary
+*.jpg binary
+*.tar.gz binary
+*.zip binary

@@ -1,5 +1,11 @@
 #!/usr/bin/env bash
+
 set -euo pipefail
+
+# Force safe system fallback locales
+export LANG=C.UTF-8
+export LC_ALL=C.UTF-8
+
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 BUNDLE_SCRIPT="${REPO_ROOT}/scripts/workstation/bundle-codebase.sh"
 SNAPSHOT_FILE="${REPO_ROOT}/docs/planning/active-codebase.md"
@@ -8,8 +14,9 @@ if [ -f "$BUNDLE_SCRIPT" ]; then
     chmod +x "$BUNDLE_SCRIPT"
     "$BUNDLE_SCRIPT"
     if [ -f "$SNAPSHOT_FILE" ]; then
-        git -C "$REPO_ROOT" add "$SNAPSHOT_FILE"
-        echo "   -> Auto-staged updated active-codebase.md."
+        # 🛡️ Removed 'git add' to respect '.gitignore' for active-codebase.md (preventing linter loops)
+        # The file is still compiled on disk so post-commit rclone sync picks it up cleanly!
+        echo "   -> Compiled updated active-codebase.md on-disk."
     fi
 else
     echo "⚠️  Compiler script not found at $BUNDLE_SCRIPT. Skipping compilation."
