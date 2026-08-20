@@ -30,8 +30,8 @@ ifeq ($(filter $(MAKECMDGOALS),$(BYPASS_PROFILE_TARGETS)),)
   ifeq ($(CI),true)
     # 🟢 CI/CD Mode: Inherit credentials and vars directly from runner environment
     $(info === CI/CD Mode: Inheriting environment variables from runner ===)
-	# 🛡️ Bridge variable extraction safely: dump ONLY valueless key names to secure clean_env
- 	$(shell env | cut -d= -f1 | awk '{print $$1 "="}' > $(CLEAN_ENV))
+    # 🛡️ Bridge variable extraction safely: dump ONLY valueless key names to secure clean_env
+ 	_prep_ci_env := $(shell env | cut -d= -f1 | awk '{print $$1 "="}' > $(CLEAN_ENV))
   else ifeq ($(USE_PROFILES),true)
     # 💻 Profiles Enabled: Enforce loud fail-fast boundary if profile is missing
     ifeq ($(wildcard $(ENV_FILE)),)
@@ -66,6 +66,25 @@ EXTRACT_VARS := ./scripts/workstation/extract-manifest-vars.sh $(CLEAN_ENV)
         kustomize-argocd bootstrap-argocd \
 		deploy-portainer deploy-vaultwarden deploy-vw-backup \
 		bundle _is_secure_tmp_safe _is_build_dir_safe
+
+# ==============================================================================
+# 🚀 MACRO ENTRY POINTS (The platform lifecycle)
+# ==============================================================================
+
+# DAY 0: Bare Metal & Host OS Layer (Locked to run-once; override with FORCE=true)
+day0-bare-metal: guard-setup check-day0-lock provision-nodes deploy-ha-dns write-day0-lock ## [Day 0] Provision bare-metal nodes and deploy HA DNS (Keepalived + Pi-hole)
+	@echo "✅ [Day 0 Complete] Physical hosts provisioned and routing is stable."
+
+# DAY 1: Platform Core & Control Plane (Gated by TDD Workstation Unit Tests)
+platform-core: test sync-azure-secrets apply-globals bootstrap-argocd ## [Day 1] Bootstrap platform core(Secrets, Globals, Argo CD GitOps Controller)
+	@echo "🚀 [Platform Core Complete] Secrets injected, global environments active, and GitOps controller live."
+
+# DAY 2: GitOps Applications (Delegates all standard deployments to Argo CD)
+gitops-apps: bootstrap-argocd ## [Day 2] Delegate all application deployments to Argo CDGitOps controller
+	@echo "=== Day 2: Declarative GitOps Sync ==="
+	@echo "Platform control handed off to Argo CD."
+	@echo "To apply app updates (Vaultwarden, backup CronJobs, etc.), simply commit changes to Git."
+	@echo "Argo CD will automatically heal drift and reconcile state in the cluster."
 
 # ==============================================================================
 # 🔒 DAY 0 PROTECTION CONTROLS (Run-Once Safety Guards)
