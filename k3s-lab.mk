@@ -30,9 +30,8 @@ ifeq ($(filter $(MAKECMDGOALS),$(BYPASS_PROFILE_TARGETS)),)
   ifeq ($(CI),true)
     # 🟢 CI/CD Mode: Inherit credentials and vars directly from runner environment
     $(info === CI/CD Mode: Inheriting environment variables from runner ===)
-	# 🛡️ Bridge the variable extraction gap: dump the runner environment to CLEAN_ENV
-    _prep_ci_env := $(shell env > $(CLEAN_ENV))
-endif
+	# 🛡️ Bridge variable extraction safely: dump ONLY valueless key names to secure clean_env
+ 	$(shell env | cut -d= -f1 | awk '{print $$1 "="}' > $(CLEAN_ENV))
   else ifeq ($(USE_PROFILES),true)
     # 💻 Profiles Enabled: Enforce loud fail-fast boundary if profile is missing
     ifeq ($(wildcard $(ENV_FILE)),)
