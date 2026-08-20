@@ -31,7 +31,7 @@ ifeq ($(filter $(MAKECMDGOALS),$(BYPASS_PROFILE_TARGETS)),)
     # 🟢 CI/CD Mode: Inherit credentials and vars directly from runner environment
     $(info === CI/CD Mode: Inheriting environment variables from runner ===)
     # 🛡️ Bridge variable extraction safely: dump ONLY valueless key names to secure clean_env
- 	_prep_ci_env := $(shell env | cut -d= -f1 | awk '{print $$1 "="}' > $(CLEAN_ENV))
+	_prep_ci_env := $(shell env | cut -d= -f1 | awk '{print $$1 "="}' > $(CLEAN_ENV))
   else ifeq ($(USE_PROFILES),true)
     # 💻 Profiles Enabled: Enforce loud fail-fast boundary if profile is missing
     ifeq ($(wildcard $(ENV_FILE)),)
@@ -96,7 +96,7 @@ ifeq ($(FORCE),true)
 else
 	@echo "🔍 Checking if Day 0 bare-metal layer is already provisioned..."
 	$(call require_tools,ssh)
-	@if ssh -n -q -o BatchMode=yes $(CONTROL_PLANE_IP) "[ -f $(DAY0_LOCK) ]"; then \
+	@if ssh -n -q -o BatchMode=yes "$(CONTROL_PLANE_IP)" "[ -f $(DAY0_LOCK) ]"; then \
 		echo "❌ ERROR: Day 0 bare-metal setup has already been run on this cluster."; \
 		echo "   To prevent accidental host network flushes or K3s control-plane corruption,"; \
 		echo "   this target is locked."; \
@@ -112,7 +112,7 @@ endif
 write-day0-lock:
 	@echo "🔒 Writing Day 0 run-once lock to control plane node..." ## Write the Day 0 lock file to the control plane node
 	$(call require_tools,ssh)
-	@ssh -n -q -o BatchMode=yes $(CONTROL_PLANE_IP) "sudo mkdir -p /etc/rancher/k3s && sudo touch $(DAY0_LOCK)"
+	@ssh -n -q -o BatchMode=yes "$(CONTROL_PLANE_IP)" "sudo mkdir -p /etc/rancher/k3s && sudo touch $(DAY0_LOCK)"
 
 # ==============================================================================
 # ⚙️ DETAILED OPERATIONAL TARGETS
@@ -128,17 +128,17 @@ kustomize-argocd: guard-setup ## Compile Kustomize AST and substitute environmen
 bootstrap-argocd: kustomize-argocd ## Deploy Argo CD controller in two-phase sync pass
 	@echo "=== Deploying Argo CD (GitOps Controller) ==="
 	@echo "=== Phase 1: Filtering & Deploying Argo CD Base (No Custom Kinds) ==="
-	# Uses standard library Python to split and filter out custom kinds (Application, AppProject)
+#   Uses standard library Python to split and filter out custom kinds (Application, AppProject)
 	$(call require_tools,python3 kubectl)
 	$(call run_script,./scripts/workstation/filter_manifest.py $(STAGE_kustomize-argocd) $(STAGE_kustomize-argocd-core))
 	kubectl apply --server-side --force-conflicts -f $(STAGE_kustomize-argocd-core)
 
 	@echo "=== Waiting for Custom Resource Definitions to stabilize ==="
-	# We block here until the API server officially establishes the Argo CD custom schemas.
+#   We block here until the API server officially establishes the Argo CD custom schemas.
 	kubectl wait --for=condition=Established crd/applications.argoproj.io crd/appprojects.argoproj.io crd/applicationsets.argoproj.io --timeout=60s
 
 	@echo "=== Phase 2: Applying Custom Resources ==="
-	# Re-applies the complete manifest including the now-valid custom resources
+#   Re-applies the complete manifest including the now-valid custom resources
 	kubectl apply --server-side --force-conflicts -f $(STAGE_kustomize-argocd)
 	@rm -f $(STAGE_kustomize-argocd-core)
 	@echo "🚀 Argo CD successfully bootstrapped!"
@@ -167,7 +167,7 @@ sync-azure-secrets: guard-setup ## Sync Azure Key Vault credentials to K3s clust
 apply-globals: guard-setup ## Inject homelab global environment ConfigMaps
 	@echo "=== Injecting global configuration from environment variables ==="
 	$(call require_tools,envsubst kubectl)
-	# 🛡️ Extract only the global vars from the manifest template
+#  🛡️ Extract only the global vars from the manifest template
 	@VARS=$$($(EXTRACT_VARS) < manifests/base/globals/homelab-globals.yaml); \
 	envsubst "$$VARS" < manifests/base/globals/homelab-globals.yaml | kubectl apply -f -
 
@@ -195,7 +195,7 @@ is_build_dir_safe = $(and \
 )
 
 clean_modules:: # remove build folder. Parent clean runs clean_core first
-	# Only purge BUILD_DIR if it is a safe relative folder name
+#   Only purge BUILD_DIR if it is a safe relative folder name
 	$(if $(call is_build_dir_safe,$(BUILD_DIR)),\
 		@rm -rf "$(BUILD_DIR)" && echo "✅ Purged local build directory: $(BUILD_DIR)",\
 		@echo "⚠️ Skipped BUILD_DIR purge: Absolute path, home folder, or directory traversal detected"\

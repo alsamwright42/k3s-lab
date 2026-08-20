@@ -183,7 +183,7 @@ is_secure_tmp_safe = $(and $(1),$(filter /tmp/%,$(1)),$(filter-out /tmp /tmp/,$(
 clean_core: # Remove decrypted environment caches
 	@echo "🧹 Wiping workspace build artifacts and secure caches..."
 
-	# Only purge SECURE_TMP_DIR if it is strictly a safe /tmp subdirectory
+#   Only purge SECURE_TMP_DIR if it is strictly a safe /tmp subdirectory
 	$(if $(call is_secure_tmp_safe,$(SECURE_TMP_DIR)),\
 		@rm -rf "$(SECURE_TMP_DIR)" && echo "✅ Purged secure temp directory: $(SECURE_TMP_DIR)",\
 		@echo "⚠️ Skipped SECURE_TMP_DIR purge: Path is empty, unsafe, or outside /tmp/"\

@@ -16,6 +16,8 @@ fi
 # 3. Intersects and outputs formatted keys for envsubst (e.g., "$DOMAIN $VIP").
 awk '
     NR==FNR {
+        # 🛡️ Strip leading "export " keyword and whitespace if present
+        sub(/^export[ \t]+/, "", $0)
         if ($1 ~ /^[A-Za-z0-9_]+/) {
             split($1, parts, "=")
             env_keys[parts[1]] = 1
