@@ -1,4 +1,4 @@
-# tests/test_k3s_makefile.py
+# tests/test_makefile_k3s.py
 import os
 import shutil
 import subprocess

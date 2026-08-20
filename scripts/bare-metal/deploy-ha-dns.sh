@@ -6,8 +6,8 @@ declare -a WORKSTATION_TEMP_FILES=()
 
 cleanup_temp_files() {
     if [ "${#WORKSTATION_TEMP_FILES[@]}" -gt 0 ]; then
-    rm -f "${WORKSTATION_TEMP_FILES[@]}"
-fi
+        rm -f "${WORKSTATION_TEMP_FILES[@]}"
+    fi
 }
 
 # Trap both standard exits and unexpected signal abortions

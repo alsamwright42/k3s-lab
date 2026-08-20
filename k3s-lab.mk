@@ -30,6 +30,9 @@ ifeq ($(filter $(MAKECMDGOALS),$(BYPASS_PROFILE_TARGETS)),)
   ifeq ($(CI),true)
     # 🟢 CI/CD Mode: Inherit credentials and vars directly from runner environment
     $(info === CI/CD Mode: Inheriting environment variables from runner ===)
+	# 🛡️ Bridge the variable extraction gap: dump the runner environment to CLEAN_ENV
+    _prep_ci_env := $(shell env > $(CLEAN_ENV))
+endif
   else ifeq ($(USE_PROFILES),true)
     # 💻 Profiles Enabled: Enforce loud fail-fast boundary if profile is missing
     ifeq ($(wildcard $(ENV_FILE)),)
@@ -146,12 +149,15 @@ sync-azure-secrets: guard-setup ## Sync Azure Key Vault credentials to K3s clust
 apply-globals: guard-setup ## Inject homelab global environment ConfigMaps
 	@echo "=== Injecting global configuration from environment variables ==="
 	$(call require_tools,envsubst kubectl)
-	envsubst < manifests/base/globals/homelab-globals.yaml | kubectl apply -f -
+	# 🛡️ Extract only the global vars from the manifest template
+	@VARS=$$($(EXTRACT_VARS) < manifests/base/globals/homelab-globals.yaml); \
+	envsubst "$$VARS" < manifests/base/globals/homelab-globals.yaml | kubectl apply -f -
 
 deploy-vw-backup: guard-setup ## Deploy standalone Vaultwarden backup CronJob manifest
 	@echo "=== Deploying Vaultwarden Backup CronJob ==="
 	$(call require_tools,envsubst kubectl)
-	envsubst '$$INGRESS_IP $$DOMAIN $$VW_URL' < manifests/apps/vaultwarden/vaultwarden-backup-cronjob.yaml | kubectl apply -f -
+	@VARS=$$($(EXTRACT_VARS) < manifests/apps/vaultwarden/vaultwarden-backup-cronjob.yaml); \
+	envsubst "$$VARS" < manifests/apps/vaultwarden/vaultwarden-backup-cronjob.yaml | kubectl apply -f -
 
 bundle: guard-setup ## Bundle the active codebase into a single markdown for AI agent consumption
 	@echo "=== Bundling codebase into a single markdown file ==="

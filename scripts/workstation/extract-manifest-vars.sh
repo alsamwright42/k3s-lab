@@ -1,5 +1,4 @@
 #!/bin/sh
-# scripts/workstation/extract-manifest-vars.sh
 # Extracts variables referenced in a manifest that are also defined in a .env file.
 # Standard: POSIX compliant stream processor (CWD/WSL/Debian compatible).
 set -eu

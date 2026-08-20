@@ -43,13 +43,13 @@ declare -A WORKER_NODES
 # Validate and Parse Worker Nodes
 for record in $WORKER_NODES_CONFIG; do
     IFS=':' read -r node ip <<< "$record"
-    
+
     # FAIL EARLY: Check if the string was malformed (missing node or IP)
     if [ -z "${node:-}" ] || [ -z "${ip:-}" ]; then
         echo "FAILED: Malformed worker record '$record'. Expected format 'hostname:IP'."
         exit 1
     fi
-    
+
     # Register the worker and dynamically build its config file name
     WORKER_NODES["$node"]="$ip"
 done
@@ -60,7 +60,7 @@ CLUSTER_NODES=("CONTROL_PLANE_NODE" "${!WORKER_NODES[@]}")
 echo "=== K3s Lab Connectivity Check ==="
 # Check Control Plane
 echo -n "Testing SSH connection to ${CONTROL_PLANE_NODE}... "
-if ssh -n -o BatchMode=yes -o ConnectTimeout=5 "${CONTROL_PLANE_NODE}" exit; then 
+if ssh -n -o BatchMode=yes -o ConnectTimeout=5 "${CONTROL_PLANE_NODE}" exit; then
     echo "Control plane connectivity verified."
 else
     echo "FAILED: Cannot reach control plane node."
@@ -106,8 +106,11 @@ for node in "${!WORKER_NODES[@]}"; do
     export WORKER_IP="${WORKER_NODES[$node]}"
 
     echo "--> Rendering template and updating ${node} (worker node)..."
+    # shellcheck disable=SC2016
     # Use envsubst to populate the YAML template with our active memory variables
-    envsubst < "${REPO_ROOT}/core/k3s-config/worker-config.yaml.template" > "/tmp/${node}-config.yaml"
+    envsubst '$CONTROL_PLANE_IP $K3S_TOKEN $WORKER_IP $INTERFACE' \
+        < "${REPO_ROOT}/core/k3s-config/worker-config.yaml.template" \
+        > "/tmp/${node}-config.yaml"
 
     scp -o BatchMode=yes "/tmp/${node}-config.yaml" "${node}:/tmp/config.yaml"
     ssh -n -o BatchMode=yes "${node}" "sudo /usr/local/bin/apply-k3s-node-config.sh worker"
