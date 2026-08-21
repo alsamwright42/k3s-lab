@@ -121,9 +121,9 @@ for node in "${!WORKER_NODES[@]}"; do
     # Use envsubst to populate the YAML template with our active memory variables
     envsubst '$CONTROL_PLANE_IP $K3S_TOKEN $WORKER_IP $INTERFACE' \
         < "${REPO_ROOT}/core/k3s-config/worker-config.yaml.template" \
-        > "/${SECURE_TMP_DIR}/${node}-config.yaml"
+        > "${SECURE_TMP_DIR}/${node}-config.yaml"
 
-    scp -o BatchMode=yes "/${SECURE_TMP_DIR}/${node}-config.yaml" "${node}:/tmp/config.yaml"
+    scp -o BatchMode=yes "${SECURE_TMP_DIR}/${node}-config.yaml" "${node}:/tmp/config.yaml"
     ssh -n -o BatchMode=yes "${node}" "sudo /usr/local/bin/apply-k3s-node-config.sh worker"
 
 done
