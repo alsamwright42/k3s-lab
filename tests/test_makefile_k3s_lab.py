@@ -1,16 +1,18 @@
 # tests/test_makefile_k3s.py
-import os
 import shutil
 import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+from typing import ClassVar
+
 from tests.support import enforce_test_toolchain, require_binaries
+
 
 class TestMakefileK3s(unittest.TestCase):
 
-    HARD_REQUIREMENTS = ["make"]
-    SOFT_REQUIREMENTS = ["kubectl", "kustomize"]
+    HARD_REQUIREMENTS: ClassVar[list[str]] = ["make"]
+    SOFT_REQUIREMENTS: ClassVar[list[str]] = ["kubectl", "kustomize", "envsubst"]
 
     @classmethod
     def setUpClass(cls):
@@ -22,8 +24,10 @@ class TestMakefileK3s(unittest.TestCase):
 
         # 2. Locate the parent Makefile and k3s.mk in the repository root
         current_file = Path(__file__).resolve()
+        self.repo_root = current_file.parent.parent
         self.makefile_src = None
         self.k3s_mk_src = None
+        self.test_targets_mk = current_file.parent / "test_k3s_lab_macros.mk"
 
         for parent in current_file.parents:
             makefile_cand = parent / "Makefile"
@@ -40,16 +44,25 @@ class TestMakefileK3s(unittest.TestCase):
         shutil.copy2(self.makefile_src, self.test_dir / "Makefile")
         shutil.copy2(self.k3s_mk_src, self.test_dir / "k3s-lab.mk")
 
+        # Symlink the entire scripts directory into the sandbox
+        scripts_link = self.test_dir / "scripts"
+        scripts_target = self.repo_root / "scripts"
+        scripts_link.symlink_to(scripts_target, target_is_directory=True)
+
         # 4. Provision dummy directories and files required for parse-time checks
         self.inventory_dir = self.test_dir / "inventory"
         self.inventory_dir.mkdir(parents=True, exist_ok=True)
-        self.env_file = self.inventory_dir / "local.env"
+        self.env_file = self.inventory_dir / "test_with_domain.env"
         self.env_file.write_text("DOMAIN=samjam.dedyn.io\nVIP=192.168.1.53\n", encoding="utf-8")
+        self.env_file = self.inventory_dir / "test_without_domain.env"
+        self.env_file.write_text("MY_DOMAIN=kelbron.ca\nVIP=192.168.1.53\n", encoding="utf-8")
 
         # Create dummy manifests directory to prevent Kustomize errors
-        self.manifest_dir = self.test_dir / "manifests/base/argocd"
+        self.manifest_dir = self.test_dir / "manifests/test/kustomize"
         self.manifest_dir.mkdir(parents=True, exist_ok=True)
-        (self.manifest_dir / "kustomization.yaml").write_text("resources:\n  - deployment.yaml\n", encoding="utf-8")
+        (self.manifest_dir / "kustomization.yaml").write_text("resources:\n  - secret.yaml\n", encoding="utf-8")
+        (self.manifest_dir / "secret.yaml").write_text("domain: ${DOMAIN}\n", encoding="utf-8")
+
 
     def tearDown(self):
         shutil.rmtree(self.test_dir)
@@ -62,6 +75,7 @@ class TestMakefileK3s(unittest.TestCase):
         """Verify that make parses k3s.mk and its parent Makefile cleanly."""
         result = subprocess.run(
             ["make", "help", "USE_PROFILES=false"],
+            check=False,
             cwd=self.test_dir,
             capture_output=True,
             text=True
@@ -88,6 +102,7 @@ class TestMakefileK3s(unittest.TestCase):
         self.assertIn("kustomize", result.stdout)
         self.assertIn("envsubst", result.stdout)
         self.assertIn("terraform", result.stdout)
+
     # =========================================================================
     # 🔬 DRY-RUN RECIPE ENFORCEMENT TESTS
     # =========================================================================
@@ -97,6 +112,7 @@ class TestMakefileK3s(unittest.TestCase):
         """Verify kustomize-argocd dry-run uses correct Awk filter logic and envsubst."""
         result = subprocess.run(
             ["make", "kustomize-argocd", "-n", "USE_PROFILES=false"],
+            check=False,
             cwd=self.test_dir,
             capture_output=True,
             text=True
@@ -128,6 +144,7 @@ class TestMakefileK3s(unittest.TestCase):
                 "BUILD_DIR=dummy-nonexistent",
                 "USE_PROFILES=false"
             ],
+            check=False,
             cwd=self.test_dir,
             capture_output=True,
             text=True
@@ -139,6 +156,128 @@ class TestMakefileK3s(unittest.TestCase):
 
         # Verify files are deleted physically
         self.assertFalse(stage_file.exists(), "K3s build stage file was not deleted!")
+
+    # =========================================================================
+    # 🛡️ SAFE_ENVSUBST TESTS
+    # =========================================================================
+    def _run_make(self, profile_name: str, target_name: str, **make_vars):
+        """Helper to run the Makefile and the test target file with the specified profile and target"""
+        cmd = [
+            "make",
+            "-f", "Makefile",
+            "-f", self.test_targets_mk,
+            target_name,
+            "USE_PROFILES=true",
+            f"PROFILE={profile_name}"
+        ]
+
+        for key, value in make_vars.items():
+            cmd.append(f"{key}={value}")
+
+        return subprocess.run(
+            cmd,
+            cwd=self.test_dir,
+            capture_output=True,
+            text=True
+        )
+
+    @require_binaries("envsubst")
+    def test_safe_envsubst_with_active_variables(self):
+        """Verify safe_envsubst correctly substitutes variables when they match the profile env."""
+
+        result = self._run_make(
+            profile_name="test_with_domain",
+            target_name="test-safe-envsubst-single-file"
+        )
+
+        self.assertEqual(result.returncode, 0, f"make failed: {result.stderr}")
+        self.assertIn("domain: samjam.dedyn.io", result.stdout)
+
+    @require_binaries("envsubst")
+    def test_safe_envsubst_with_unmatched_variables_fallback(self):
+        """Verify safe_envsubst falls back to 'cat' (leaving placeholders untouched) when no keys match."""
+
+        result = self._run_make(
+            profile_name="test_without_domain",
+            target_name="test-safe-envsubst-single-file"
+        )
+
+        self.assertEqual(result.returncode, 0, f"make failed: {result.stderr}")
+        # Must pass through perfectly untouched (proving NO empty-string blanket expansion took place)
+        self.assertIn("domain: ${DOMAIN}", result.stdout)
+
+    @require_binaries("envsubst")
+    def test_safe_envsubst_with_separated_resource_files_and_wildcards(self):
+        """
+        Verify safe_envsubst handles the Kustomize pattern:
+        Scanning down-stream resource files via glob wildcards (*.yaml)
+        while processing a separate compiled stream.
+        """
+        result = self._run_make(
+            profile_name="test_with_domain",
+            target_name="test-safe-envsubst-multiple-files",
+            TARGET_PATH="manifests/test/kustomize/*.yaml"
+        )
+
+        self.assertEqual(result.returncode, 0, f"make failed: {result.stderr}")
+        # Verify substitution succeeded because the glob was successfully expanded by cat!
+        self.assertIn("stream_domain: samjam.dedyn.io", result.stdout)
+
+    @require_binaries("envsubst")
+    def test_safe_envsubst_with_separated_resource_files_and_wildcards_and_unmatched(self):
+        """Verify safe_envsubst handles the Kustomize pattern when no keys match."""
+
+        result = self._run_make(
+            profile_name="test_without_domain",
+            target_name="test-safe-envsubst-multiple-files",
+            TARGET_PATH="manifests/test/kustomize/*.yaml"
+        )
+
+        self.assertEqual(result.returncode, 0, f"make failed: {result.stderr}")
+        # Verify substitution succeeded because the glob was successfully expanded by cat!
+        self.assertIn("stream_domain: ${DOMAIN}", result.stdout)
+
+    @require_binaries("envsubst")
+    def test_safe_envsubst_fails_loudly_on_missing_files(self):
+        """Verify safe_envsubst handles the Kustomize pattern when no keys match."""
+
+        result = self._run_make(
+            profile_name="test_without_domain",
+            target_name="test-safe-envsubst-multiple-files",
+            TARGET_PATH="manifests/test/nopath/*.yaml"
+        )
+
+        print(result.stdout)
+        self.assertEqual(result.returncode, 0, f"make failed: {result.stderr}")
+        # Verify substitution succeeded because the glob was successfully expanded by cat!
+        self.assertIn("stream_domain: ${DOMAIN}", result.stdout)
+
+    # def test_safe_envsubst_fails_loudly_on_missing_files(self):
+    #     """Verify safe_envsubst fails-fast if a template path or wildcard is unresolvable."""
+    #     test_harness = self.test_dir / "Makefile.test"
+    #     test_env = self.test_dir / "test_fail.env"
+    #     test_env.write_text("DOMAIN=samjam.dedyn.io\n", encoding="utf-8")
+
+    #     test_harness.write_text(
+    #         f"include Makefile\n\n"
+    #         f"# Override variables for isolated testing\n"
+    #         f"CLEAN_ENV := {test_env}\n"
+    #         f"EXTRACT_VARS := ./scripts/workstation/extract-manifest-vars.sh $(CLEAN_ENV)\n\n"
+    #         f"test-target:\n"
+    #         f"\t@echo \"stream_domain: $${{DOMAIN}}\" | $(call safe_envsubst,nonexistent_path_to_fail/*.yaml)\n",
+    #         encoding="utf-8"
+    #     )
+
+    #     result = subprocess.run(
+    #         ["make", "-f", "Makefile.test", "test-target", "USE_PROFILES=false"],
+    #         cwd=self.test_dir,
+    #         capture_output=True,
+    #         text=True
+    #     )
+    #     # Verify we did NOT swallow the error: cat must complain loudly to stderr
+    #     self.assertIn("nonexistent_path_to_fail/*.yaml", result.stderr)
+    #     self.assertIn("No such file or directory", result.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()

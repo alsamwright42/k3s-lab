@@ -106,7 +106,7 @@ CI           := $(strip $(CI))
 SETUP_SENTINEL := .setup_done
 
 .PHONY: setup setup-githooks check-workstation-tools guard-setup test help \
-		clean clean_core clean_modules _is_secure_tmp_safe _is_build_dir_safe
+		clean clean_core clean_modules
 
 .DEFAULT_GOAL := help
 

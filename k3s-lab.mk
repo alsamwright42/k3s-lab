@@ -26,12 +26,14 @@ CLEAN_ENV := $(SECURE_TMP_DIR)/clean-$(PROFILE).env
 # 🔌 Bypass profile loading for non-operational utility targets (speeds up help, clean, setup, and tests)
 BYPASS_PROFILE_TARGETS := help clean test setup setup-githooks check-workstation-tools
 
-ifeq ($(filter $(MAKECMDGOALS),$(BYPASS_PROFILE_TARGETS)),)
+MAKECMDGOALS_OR_DEFAULT := $(or $(MAKECMDGOALS),$(.DEFAULT_GOAL))
+
+ifeq ($(filter $(MAKECMDGOALS_OR_DEFAULT),$(BYPASS_PROFILE_TARGETS)),)
   ifeq ($(CI),true)
     # 🟢 CI/CD Mode: Inherit credentials and vars directly from runner environment
     $(info === CI/CD Mode: Inheriting environment variables from runner ===)
     # 🛡️ Bridge variable extraction safely: dump ONLY valueless key names to secure clean_env
-	_prep_ci_env := $(shell env | cut -d= -f1 | awk '{print $$1 "="}' > $(CLEAN_ENV))
+    _prep_ci_env := $(shell env | cut -d= -f1 | awk '{print $$1 "="}' > $(CLEAN_ENV))
   else ifeq ($(USE_PROFILES),true)
     # 💻 Profiles Enabled: Enforce loud fail-fast boundary if profile is missing
     ifeq ($(wildcard $(ENV_FILE)),)
@@ -53,19 +55,37 @@ STAGE_kustomize-argocd := $(SECURE_TMP_DIR)/kustomize-argocd.yaml
 STAGE_kustomize-argocd-core := $(SECURE_TMP_DIR)/kustomize-argocd-core.yaml
 DAY0_LOCK := /etc/rancher/k3s/.day0_lock
 
+# =============================================================================
 # 🛠️ LOCAL HELPER FUNCTIONS AND INLINE EVALUATED VARIABLES
+# =============================================================================
 # Local stream-processing commands or configurations unique to this module.
 # Evaluated strictly inside recipes to prevent parse-time latency.
 EXTRACT_VARS := ./scripts/workstation/extract-manifest-vars.sh $(CLEAN_ENV)
 
+# Stream-based Bounded Envsubst Macro
+# Reads from stdin, extracts variables from the specified template file, and writes to stdout.
+# If variables are found, it runs envsubst. If empty, it passes stdin straight through via cat.
+# Wrapped in a subshell group ( ) to safely preserve stream buffers in pipelines.
+# Usage: cat input.yaml | $(call safe_envsubst,template.yaml) > output.yaml
+define safe_envsubst
+    (VARS=$$(cat $(1) | $(EXTRACT_VARS)); \
+    if [ -n "$$VARS" ]; then \
+        envsubst "$$VARS"; \
+    else \
+        cat; \
+    fi)
+endef
+
+# =============================================================================
 # ⚓ DYNAMIC TARGET DECLARATIONS (.PHONY & Double-Colon overrides)
+# =============================================================================
 # Safely appends this module's targets to the global build index.
 .PHONY: day0-bare-metal platform-core gitops-apps \
-        check-day0-lock write-day0-lock \
+		check-day0-lock write-day0-lock \
 		provision-nodes deploy-ha-dns sync-azure-secrets apply-globals \
-        kustomize-argocd bootstrap-argocd \
-		deploy-portainer deploy-vaultwarden deploy-vw-backup \
-		bundle _is_secure_tmp_safe _is_build_dir_safe
+  		kustomize-argocd bootstrap-argocd \
+		deploy-vaultwarden deploy-vw-backup \
+		bundle clean_modules
 
 # ==============================================================================
 # 🚀 MACRO ENTRY POINTS (The platform lifecycle)
@@ -76,11 +96,11 @@ day0-bare-metal: guard-setup check-day0-lock provision-nodes deploy-ha-dns write
 	@echo "✅ [Day 0 Complete] Physical hosts provisioned and routing is stable."
 
 # DAY 1: Platform Core & Control Plane (Gated by TDD Workstation Unit Tests)
-platform-core: test sync-azure-secrets apply-globals bootstrap-argocd ## [Day 1] Bootstrap platform core(Secrets, Globals, Argo CD GitOps Controller)
+platform-core: test sync-azure-secrets apply-globals bootstrap-argocd ## [Day 1] Bootstrap platform core (Secrets, Globals, Argo CD GitOps Controller)
 	@echo "🚀 [Platform Core Complete] Secrets injected, global environments active, and GitOps controller live."
 
 # DAY 2: GitOps Applications (Delegates all standard deployments to Argo CD)
-gitops-apps: bootstrap-argocd ## [Day 2] Delegate all application deployments to Argo CDGitOps controller
+gitops-apps: bootstrap-argocd ## [Day 2] Delegate all application deployments to Argo CD GitOps controller
 	@echo "=== Day 2: Declarative GitOps Sync ==="
 	@echo "Platform control handed off to Argo CD."
 	@echo "To apply app updates (Vaultwarden, backup CronJobs, etc.), simply commit changes to Git."
@@ -90,7 +110,7 @@ gitops-apps: bootstrap-argocd ## [Day 2] Delegate all application deployments to
 # 🔒 DAY 0 PROTECTION CONTROLS (Run-Once Safety Guards)
 # ==============================================================================
 
-check-day0-lock: ## Verify if the Day 0 bare-metal layer is already provisioned
+check-day0-lock: guard-setup ## Verify if the Day 0 bare-metal layer is already provisioned
 ifeq ($(FORCE),true)
 	@echo "⚠️ FORCE=true specified. Bypassing Day 0 run-once safety guards!"
 else
@@ -109,7 +129,7 @@ else
 	@echo "✅ No prior Day 0 lock detected. Proceeding..."
 endif
 
-write-day0-lock:
+write-day0-lock: guard-setup
 	@echo "🔒 Writing Day 0 run-once lock to control plane node..." ## Write the Day 0 lock file to the control plane node
 	$(call require_tools,ssh)
 	@ssh -n -q -o BatchMode=yes "$(CONTROL_PLANE_IP)" "sudo mkdir -p /etc/rancher/k3s && sudo touch $(DAY0_LOCK)"
@@ -121,8 +141,11 @@ write-day0-lock:
 kustomize-argocd: guard-setup ## Compile Kustomize AST and substitute environment variables
 	@echo "=== Compiling and Verifying ArgoCD Kustomize build ==="
 	$(call require_tools,envsubst kubectl kustomize)
-	@VARS=$$($(EXTRACT_VARS) < manifests/base/argocd/kustomization.yaml); \
-	kubectl kustomize manifests/base/argocd/ | envsubst "$$VARS" > $(STAGE_kustomize-argocd)
+	@if [ -z "$(wildcard manifests/base/argocd/*.yaml)" ]; then \
+		echo "❌ ERROR: No manifest templates found in manifests/base/argocd/!" && exit 1; \
+	fi
+	@kubectl kustomize manifests/base/argocd/ | $(call safe_envsubst,manifests/base/argocd/*.yaml) \
+	> $(STAGE_kustomize-argocd)
 	@echo "✅ Kustomize validation succeeded! Rendered manifest cached at $(STAGE_kustomize-argocd)"
 
 bootstrap-argocd: kustomize-argocd ## Deploy Argo CD controller in two-phase sync pass
@@ -163,19 +186,17 @@ sync-azure-secrets: guard-setup ## Sync Azure Key Vault credentials to K3s clust
 	$(call require_tools,ssh)
 	$(call run_script,./scripts/azure/sync-azure-secrets.sh)
 
-
 apply-globals: guard-setup ## Inject homelab global environment ConfigMaps
 	@echo "=== Injecting global configuration from environment variables ==="
 	$(call require_tools,envsubst kubectl)
-#  🛡️ Extract only the global vars from the manifest template
-	@VARS=$$($(EXTRACT_VARS) < manifests/base/globals/homelab-globals.yaml); \
-	envsubst "$$VARS" < manifests/base/globals/homelab-globals.yaml | kubectl apply -f -
+	@$(call safe_envsubst,manifests/base/globals/homelab-globals.yaml) \
+	< manifests/base/globals/homelab-globals.yaml | kubectl apply -f -
 
 deploy-vw-backup: guard-setup ## Deploy standalone Vaultwarden backup CronJob manifest
 	@echo "=== Deploying Vaultwarden Backup CronJob ==="
 	$(call require_tools,envsubst kubectl)
-	@VARS=$$($(EXTRACT_VARS) < manifests/apps/vaultwarden/vaultwarden-backup-cronjob.yaml); \
-	envsubst "$$VARS" < manifests/apps/vaultwarden/vaultwarden-backup-cronjob.yaml | kubectl apply -f -
+	@$(call safe_envsubst,manifests/apps/vaultwarden/vaultwarden-backup-cronjob.yaml) \
+	< manifests/apps/vaultwarden/vaultwarden-backup-cronjob.yaml | kubectl apply -f -
 
 bundle: guard-setup ## Bundle the active codebase into a single markdown for AI agent consumption
 	@echo "=== Bundling codebase into a single markdown file ==="

@@ -72,3 +72,6 @@ docs/planning/active-codebase.md
 
 # temp folder for local testing manifests
 manifests/base/temp/
+
+# local folder that we do not want to be under vc
+.local/
