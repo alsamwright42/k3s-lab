@@ -92,6 +92,7 @@ class TestMakefileK3s(unittest.TestCase):
         )
         result = subprocess.run(
             ["make", "-f", "Makefile.test", "test-tools", "USE_PROFILES=false"],
+            check=False,
             cwd=self.test_dir,
             capture_output=True,
             text=True
@@ -176,6 +177,7 @@ class TestMakefileK3s(unittest.TestCase):
 
         return subprocess.run(
             cmd,
+            check=False,
             cwd=self.test_dir,
             capture_output=True,
             text=True
@@ -247,36 +249,9 @@ class TestMakefileK3s(unittest.TestCase):
             TARGET_PATH="manifests/test/nopath/*.yaml"
         )
 
-        print(result.stdout)
         self.assertEqual(result.returncode, 0, f"make failed: {result.stderr}")
         # Verify substitution succeeded because the glob was successfully expanded by cat!
         self.assertIn("stream_domain: ${DOMAIN}", result.stdout)
-
-    # def test_safe_envsubst_fails_loudly_on_missing_files(self):
-    #     """Verify safe_envsubst fails-fast if a template path or wildcard is unresolvable."""
-    #     test_harness = self.test_dir / "Makefile.test"
-    #     test_env = self.test_dir / "test_fail.env"
-    #     test_env.write_text("DOMAIN=samjam.dedyn.io\n", encoding="utf-8")
-
-    #     test_harness.write_text(
-    #         f"include Makefile\n\n"
-    #         f"# Override variables for isolated testing\n"
-    #         f"CLEAN_ENV := {test_env}\n"
-    #         f"EXTRACT_VARS := ./scripts/workstation/extract-manifest-vars.sh $(CLEAN_ENV)\n\n"
-    #         f"test-target:\n"
-    #         f"\t@echo \"stream_domain: $${{DOMAIN}}\" | $(call safe_envsubst,nonexistent_path_to_fail/*.yaml)\n",
-    #         encoding="utf-8"
-    #     )
-
-    #     result = subprocess.run(
-    #         ["make", "-f", "Makefile.test", "test-target", "USE_PROFILES=false"],
-    #         cwd=self.test_dir,
-    #         capture_output=True,
-    #         text=True
-    #     )
-    #     # Verify we did NOT swallow the error: cat must complain loudly to stderr
-    #     self.assertIn("nonexistent_path_to_fail/*.yaml", result.stderr)
-    #     self.assertIn("No such file or directory", result.stderr)
 
 
 if __name__ == "__main__":
