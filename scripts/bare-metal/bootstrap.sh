@@ -1,6 +1,17 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Inherit SECURE_TMP_DIR from parent Makefile, fallback to a safe local default if run standalone
+if [ -z "${SECURE_TMP_DIR:-}" ]; then
+    # Lightweight, portable single-line fallback for direct script executions
+    WORKSPACE_HASH="$( (printf '%s' "$(pwd)" | sha256sum 2>/dev/null || printf '%s' "$(pwd)" | shasum -a 256 2>/dev/null || echo "default") | cut -c1-8 )"
+    SECURE_TMP_DIR="/tmp/k3s-lab-$(id -u)-${WORKSPACE_HASH}"
+fi
+
+# Ensure the workspace directory is prepped and locked down (0700)
+mkdir -p "${SECURE_TMP_DIR}"
+chmod 700 "${SECURE_TMP_DIR}"
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
@@ -43,13 +54,13 @@ declare -A WORKER_NODES
 # Validate and Parse Worker Nodes
 for record in $WORKER_NODES_CONFIG; do
     IFS=':' read -r node ip <<< "$record"
-    
+
     # FAIL EARLY: Check if the string was malformed (missing node or IP)
     if [ -z "${node:-}" ] || [ -z "${ip:-}" ]; then
         echo "FAILED: Malformed worker record '$record'. Expected format 'hostname:IP'."
         exit 1
     fi
-    
+
     # Register the worker and dynamically build its config file name
     WORKER_NODES["$node"]="$ip"
 done
@@ -60,7 +71,7 @@ CLUSTER_NODES=("CONTROL_PLANE_NODE" "${!WORKER_NODES[@]}")
 echo "=== K3s Lab Connectivity Check ==="
 # Check Control Plane
 echo -n "Testing SSH connection to ${CONTROL_PLANE_NODE}... "
-if ssh -n -o BatchMode=yes -o ConnectTimeout=5 "${CONTROL_PLANE_NODE}" exit; then 
+if ssh -n -o BatchMode=yes -o ConnectTimeout=5 "${CONTROL_PLANE_NODE}" exit; then
     echo "Control plane connectivity verified."
 else
     echo "FAILED: Cannot reach control plane node."
@@ -106,10 +117,13 @@ for node in "${!WORKER_NODES[@]}"; do
     export WORKER_IP="${WORKER_NODES[$node]}"
 
     echo "--> Rendering template and updating ${node} (worker node)..."
+    # shellcheck disable=SC2016
     # Use envsubst to populate the YAML template with our active memory variables
-    envsubst < "${REPO_ROOT}/core/k3s-config/worker-config.yaml.template" > "/tmp/${node}-config.yaml"
+    envsubst '$CONTROL_PLANE_IP $K3S_TOKEN $WORKER_IP $INTERFACE' \
+        < "${REPO_ROOT}/core/k3s-config/worker-config.yaml.template" \
+        > "${SECURE_TMP_DIR}/${node}-config.yaml"
 
-    scp -o BatchMode=yes "/tmp/${node}-config.yaml" "${node}:/tmp/config.yaml"
+    scp -o BatchMode=yes "${SECURE_TMP_DIR}/${node}-config.yaml" "${node}:/tmp/config.yaml"
     ssh -n -o BatchMode=yes "${node}" "sudo /usr/local/bin/apply-k3s-node-config.sh worker"
 
 done
