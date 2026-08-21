@@ -4,7 +4,7 @@ set -euo pipefail
 # Inherit SECURE_TMP_DIR from parent Makefile, fallback to a safe local default if run standalone
 if [ -z "${SECURE_TMP_DIR:-}" ]; then
     # Lightweight, portable single-line fallback for direct script executions
-    WORKSPACE_HASH := "$( (printf '%s' "$(pwd)" | sha256sum 2>/dev/null || printf '%s' "$(pwd)" | shasum -a 256 2>/dev/null || echo "default") | cut -c1-8 )"
+    WORKSPACE_HASH="$( (printf '%s' "$(pwd)" | sha256sum 2>/dev/null || printf '%s' "$(pwd)" | shasum -a 256 2>/dev/null || echo "default") | cut -c1-8 )"
     SECURE_TMP_DIR="/tmp/k3s-lab-$(id -u)-${WORKSPACE_HASH}"
 fi
 
@@ -121,9 +121,9 @@ for node in "${!WORKER_NODES[@]}"; do
     # Use envsubst to populate the YAML template with our active memory variables
     envsubst '$CONTROL_PLANE_IP $K3S_TOKEN $WORKER_IP $INTERFACE' \
         < "${REPO_ROOT}/core/k3s-config/worker-config.yaml.template" \
-        > "/${SECURE_TEMP}/${node}-config.yaml"
+        > "/${SECURE_TMP_DIR}/${node}-config.yaml"
 
-    scp -o BatchMode=yes "/${SECURE_TEMP}/${node}-config.yaml" "${node}:/tmp/config.yaml"
+    scp -o BatchMode=yes "/${SECURE_TMP_DIR}/${node}-config.yaml" "${node}:/tmp/config.yaml"
     ssh -n -o BatchMode=yes "${node}" "sudo /usr/local/bin/apply-k3s-node-config.sh worker"
 
 done

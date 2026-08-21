@@ -9,7 +9,7 @@
 UID := $(shell id -u)
 # Dynamic workspace hashing for isolation (macOS and Linux compliant)
 WORKSPACE_HASH := $(shell (printf '%s' "$(CURDIR)" | sha256sum 2>/dev/null || printf '%s' "$(CURDIR)" | shasum -a 256 2>/dev/null || echo "default") | cut -c1-8)
-SECURE_TMP_DIR := /tmp/ops-$(WORKSPACE_HASH)-$(UID)
+SECURE_TMP_DIR := /tmp/ops-$(UID)-$(WORKSPACE_HASH)
 # Ensure the secure directory exists with strict permissions (drwx------) before evaluating paths
 _prep_secure_tmp := $(shell mkdir -p $(SECURE_TMP_DIR) && chmod 700 $(SECURE_TMP_DIR))
 
